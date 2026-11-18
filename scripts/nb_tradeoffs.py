@@ -3,20 +3,42 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
-from scripts.cells import Cell, code, md
+from scripts.cells import Cell, code, md, mermaid
+
+CHOICE_DIAGRAM = mermaid(
+    """
+flowchart TD
+    Q1["Need generated text?"] -->|"yes"| L["Use an LLM"]
+    Q1 -->|"no"| Q2["Need tool calls or<br/>your own JSON schema?"]
+    Q2 -->|"yes"| L
+    Q2 -->|"no"| Q3["Need a typed answer, fast and auditable?<br/>probability, choice or score"]
+    Q3 -->|"yes"| D["Use Decisions"]:::decisions
+    Q3 -->|"no"| L
+    D --> R["Route in code<br/>fail safe to attorney"]
+""",
+    "decisions",
+)
 
 
 def _engines() -> list[Cell]:
     return [
-        md("""
+        md(
+            """
 ## Tradeoffs and scenario mapping
 
 This section zooms out. It asks **when a decision model is better and when a step still needs an LLM**, using a step matrix, an engine comparison, a threshold sweep and cascade economics. Then it maps architectures to operating scenarios.
 
-### Decision models vs LLMs
+### Decisions or LLM?
+
+"""
+            + CHOICE_DIAGRAM
+            + """
+
+*Start at the top and answer in order; the first yes decides the engine.*
 
 The matrix goes through every step of the agent and names the engine that fits.
-"""),
+"""
+        ),
         code("""
 from doc_review_opt.tradeoffs import STEP_MATRIX, WHEN_TO_USE
 
@@ -70,17 +92,16 @@ else:
     print("Dry-run mode. Set OPENAI_API_KEY and RUN_LIVE_API_CALLS=true to compare the engines on the real APIs.")
 """),
         md("""
-**Cost against quality.** Marker size is p50 latency. In the simulation, Decisions is cheap and fast, and the strongest LLM is more accurate at roughly ten times the cost per page. The Decisions profile is an assumption, so read the shape, not the accuracy. Live (2026-11-18, 6 pages), Decisions was fastest but not cheapest: `gpt-6-luna` as an LLM cost about 0.6x as much per page.
+**Cost against latency.** One dot per engine; the bottom-left corner is better. In the simulation, Decisions is cheap and fast, and the strongest LLM costs roughly ten times more per page (accuracy is in the table above). The Decisions profile is an assumption, so read the shape, not the exact values. Live (2026-11-18, 6 pages), Decisions was fastest but not cheapest: `gpt-6-luna` as an LLM cost about 0.6x as much per page.
 """),
         code("""
-plot_engine_tradeoff(engine_comparison_table(engine_runs_calibrated))
-plt.show()
+display(plot_engine_tradeoff(engine_comparison_table(engine_runs_calibrated)))
 """),
         md("""
-**Threshold sweep.** A lower privilege threshold escalates more and leaks fewer privileged pages. Each engine needs its own operating point: sharper probabilities make the threshold matter less, and an unsure engine needs a lower one.
+**Threshold sweep.** A lower privilege threshold escalates more and leaks fewer privileged pages. Each engine needs its own operating point. **How to read it:** each line is one engine; a red cross marks a threshold where a privileged page would be produced.
 """),
         code("""
-from doc_review_opt.tradeoffs import threshold_sweep
+from doc_review_opt.tradeoffs import plot_threshold_sweep, threshold_sweep
 
 sweep = threshold_sweep(engine_runs_default, EVAL_SET)
 for column, fmt in (("escalation_rate", "{:.0%}"), ("privileged_leaks", "{:.0f}")):
@@ -90,17 +111,7 @@ for column, fmt in (("escalation_rate", "{:.0%}"), ("privileged_leaks", "{:.0f}"
         .style.format(fmt)
         .format_index("{:.2f}")
     )
-fig, axes = plt.subplots(1, 2, figsize=(12, 3.8))
-for engine, group in sweep.groupby("engine"):
-    axes[0].plot(group["privilege_threshold"], group["escalation_rate"], marker="o", label=engine)
-    axes[1].plot(group["privilege_threshold"], group["privileged_leaks"], marker="o", label=engine)
-axes[0].set_title("Escalation rate")
-axes[1].set_title("Privileged pages that would be produced")
-for axis in axes:
-    axis.set_xlabel("privilege escalation threshold")
-    axis.legend()
-plt.tight_layout()
-plt.show()
+display(plot_threshold_sweep(sweep))
 """),
         md("""
 **Cascade economics (simulated).** Decisions alone has the lowest model cost, but its extra mistakes cost attorney time. A `gpt-6.1-terra` second opinion on the ambiguous band costs a little more and cuts escalations. `gpt-6.1-terra` on everything costs several times more for no better quality. `blended` includes attorney time.
@@ -341,6 +352,18 @@ Live Decisions privileged probability on the two attorney-cc'd mails (original w
 2. **Decisions won on latency, not always price.** About 6x faster but 1.7x pricier than `gpt-6-luna` as an LLM; 4 to 6x cheaper and 6 to 8x faster than `gpt-6.1-terra`. Its other benefits are calibratable probabilities and an auditable router.
 3. **The wording lever was not needed.** The real API scores cc'd mail near 0 with either wording, so the simulated over-escalation (about 0.3) did not reproduce. The protocol wording stays because it is free.
 4. **Round 4 caching cost more** on 6 pages ($0.00021 against $0.00008 per page). It pays only at volume.
+"""),
+        md("""
+**How to read it.** Blue is the simulation, orange is the measured live run. The recorded values are the table above; a live session in this notebook replaces them.
+"""),
+        code("""
+from doc_review_opt.reporting import plot_sim_vs_live, recorded_live_note, recorded_live_summary
+
+if live_runs:
+    live_view, live_note = live_summary, f"live: {LIVE_PAGE_LIMIT} pages, this session"
+else:
+    live_view, live_note = recorded_live_summary(), recorded_live_note()
+display(plot_sim_vs_live(summary, live_view, live_note))
 """),
     ]
 

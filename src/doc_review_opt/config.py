@@ -224,6 +224,56 @@ class OperatingScenario(_Frozen):
     recommended: tuple[str, ...]
 
 
+class Palette(_Frozen):
+    surface: str
+    text: str
+    grid: str
+    ink: str
+    blue: str
+    orange: str
+    aqua: str
+    yellow: str
+    magenta: str
+    green: str
+    good: str
+    critical: str
+
+
+class Chart(_Frozen):
+    width: float
+    height: float
+    tall_height: float
+    font_size: float
+    title_size: float
+    line_width: float
+    marker_size: float
+    bar_width: float
+    grid_width: float
+    label_pad: float
+    min_label_share: float
+    log_floor_factor: float
+    log_headroom: float
+    label_box_pad: float
+    threshold_axis_max: float
+
+
+class LiveRound(_Frozen):
+    variant: str
+    quality: float
+    escalation_rate: float
+    sync_tokens: int
+    p50_latency_s: float
+    model_cost_per_page_usd: float
+
+
+class LiveRun(_Frozen):
+    date: str
+    pages: int
+    cost_usd: float
+    cheapest_engine: str
+    rounds: tuple[LiveRound, ...]
+
+
 class Settings(_Frozen):
     models: Models
     pricing: Pricing
@@ -240,6 +290,10 @@ class Settings(_Frozen):
     synthetic: Synthetic
     architecture: dict[str, ArchitectureOption]
     scenarios: tuple[OperatingScenario, ...]
+    palette: Palette
+    entity_colors: dict[str, str]
+    chart: Chart
+    live_run: LiveRun
 
 
 def parse_settings(raw: Mapping[str, Any]) -> Settings:

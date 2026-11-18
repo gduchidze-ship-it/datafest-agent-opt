@@ -3,10 +3,12 @@
 import asyncio
 
 import httpx2
+import numpy as np
 import pandas as pd
 import pytest
-from matplotlib.figure import Figure
+from matplotlib.colors import to_hex
 
+from doc_review_opt.chart_style import PALETTE
 from doc_review_opt.config import get_settings
 from doc_review_opt.decisions import DEFAULT_POLICY, RoutingPolicy
 from doc_review_opt.graph import build_review_graph, review_checkpointer, run_batch
@@ -24,14 +26,16 @@ from doc_review_opt.tradeoffs import (
     engine_comparison_table,
     evaluate_policy,
     live_engine_comparison,
+    plot_calibration,
     plot_engine_tradeoff,
+    plot_threshold_sweep,
     policy_report,
     replay,
     simulate_engine_comparison,
     threshold_sweep,
 )
 from doc_review_opt.variants import CALIBRATED_POLICY
-from tests.helpers import at, row
+from tests.helpers import assert_clean_chart, at, bar_colors, row
 from tests.test_decisions_classifier import OK_ANSWERS, client_for, decisions_body
 
 LIVE = get_settings().live
@@ -92,7 +96,21 @@ def test_engine_table_columns_and_values(runs: dict[str, ReviewRun]) -> None:
     assert at(table, "decisions", "escalation_rate") > at(
         table, "llm-terra", "escalation_rate"
     )
-    assert isinstance(plot_engine_tradeoff(table.reset_index()), Figure)
+    fig = plot_engine_tradeoff(table.reset_index())
+    assert_clean_chart(fig, 1)
+    assert fig.axes[0].get_xscale() == "log"
+    colors = {to_hex(np.asarray(c.get_facecolor())[0]) for c in fig.axes[0].collections}
+    assert colors == {PALETTE.blue, PALETTE.orange, PALETTE.aqua, PALETTE.yellow}
+    title = fig.get_suptitle()
+    assert "Simulated" in title
+    assert "both" not in title
+    assert "live gpt-6-luna LLM was cheaper" in title
+    legend = fig.axes[0].get_legend()
+    assert legend is not None
+    legend_names = {t.get_text() for t in legend.get_texts()}
+    point_names = {t.get_text() for t in fig.axes[0].texts}
+    assert legend_names <= point_names
+    assert "gpt-6.1-terra agent" in legend_names
 
 
 def test_threshold_sweep_shows_leaks_appear_at_high_thresholds(
@@ -209,3 +227,49 @@ def test_replay_redacts_an_escalated_page_whose_classifier_errored() -> None:
     assert not [
         s for s in secret.labels.pii_spans if s in replayed.outcome.produced_text
     ]
+
+
+def test_threshold_sweep_chart_marks_leaks_and_labels_lines(
+    runs: dict[str, ReviewRun],
+) -> None:
+    sweep = threshold_sweep(runs, EVAL_SET)
+    fig = plot_threshold_sweep(sweep)
+    assert_clean_chart(fig, 1)
+    lines = {to_hex(line.get_color()) for line in fig.axes[0].lines}
+    assert {PALETTE.blue, PALETTE.orange, PALETTE.aqua} <= lines
+    assert PALETTE.critical in lines
+    texts = {t.get_text() for t in fig.axes[0].texts}
+    assert {"Decisions", "gpt-6-luna LLM", "gpt-6.1-terra LLM"} <= texts
+    assert fig.axes[0].get_xlim() == (0.0, 1.0)
+    title = fig.get_suptitle()
+    assert title.startswith("Simulated:")
+    assert "gpt-6-luna LLM leaks privileged pages from 0.50" in title
+    assert "gpt-6.1-terra LLM from 0.80" in title
+    assert "Decisions never leaks" in title
+
+
+def test_threshold_sweep_chart_without_leaks_says_so() -> None:
+    sweep = pd.DataFrame(
+        {
+            "engine": ["decisions", "decisions"],
+            "privilege_threshold": [0.1, 0.2],
+            "escalation_rate": [0.5, 0.4],
+            "privileged_leaks": [0, 0],
+        }
+    )
+    title = plot_threshold_sweep(sweep).get_suptitle()
+    assert "no privileged page leaks" in title
+    assert "Simulated" in title
+
+
+def test_calibration_chart_reports_zero_leaks(runs: dict[str, ReviewRun]) -> None:
+    table = policy_report(
+        classifications(runs),
+        {"calibration": CALIBRATION, "holdout": HOLDOUT},
+        {"default": DEFAULT_POLICY, "calibrated": CALIBRATED_POLICY},
+    )
+    fig = plot_calibration(table)
+    assert_clean_chart(fig, 1)
+    assert bar_colors(fig.axes[0])[0] == PALETTE.yellow
+    assert bar_colors(fig.axes[0])[-1] == PALETTE.aqua
+    assert "0 leaks" in fig.get_suptitle()

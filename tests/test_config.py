@@ -65,3 +65,13 @@ def test_toml_is_inside_the_package_directory() -> None:
 def test_calibration_grid_searches_the_privilege_threshold() -> None:
     grid = get_settings().calibration.privilege_escalation
     assert tuple(grid) == (0.2, 0.25, 0.3, 0.35, 0.4, 0.45)
+
+
+def test_palette_and_live_run_load() -> None:
+    settings = get_settings()
+    assert settings.palette.surface == "#fcfcfb"
+    assert settings.palette.blue == "#2a78d6"
+    assert settings.palette.critical == "#d03b3b"
+    assert set(settings.entity_colors.values()) <= set(settings.palette.model_dump())
+    assert settings.live_run.pages == settings.live.page_limit
+    assert [r.variant for r in settings.live_run.rounds] == VARIANT_ORDER

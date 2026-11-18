@@ -8,11 +8,21 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
-import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
+from matplotlib.ticker import PercentFormatter
 from openai import AsyncOpenAI
 
+from doc_review_opt.chart_style import (
+    CHART,
+    PALETTE,
+    add_legend,
+    color,
+    label_bars,
+    new_figure,
+    style_axis,
+)
 from doc_review_opt.config import Calibration, get_settings
 from doc_review_opt.decisions import (
     DEFAULT_POLICY,
@@ -66,6 +76,12 @@ ENGINE_LABELS = {
     "llm-luna": f"LLM probabilities ({MODELS.luna})",
     "llm-terra": f"LLM probabilities ({MODELS.terra})",
     "agent": f"Agent ({MODELS.terra})",
+}
+ENGINE_SHORT = {
+    "decisions": "Decisions",
+    "llm-luna": f"{MODELS.luna} LLM",
+    "llm-terra": f"{MODELS.terra} LLM",
+    "agent": f"{MODELS.terra} agent",
 }
 TYPED_ENGINES = ("decisions", "llm-luna", "llm-terra")
 
@@ -438,18 +454,188 @@ async def cascade_analysis(pages: Sequence[ReviewPage] = EVAL_SET) -> pd.DataFra
 
 
 def plot_engine_tradeoff(table: pd.DataFrame) -> Figure:
-    fig, axis = plt.subplots(figsize=(7, 4.5))
-    sizes = 80 + 400 * table["p50_latency_s"] / table["p50_latency_s"].max()
-    axis.scatter(
-        table["cost_per_page_usd"], table["accuracy_vs_labels"], s=sizes, alpha=0.6
+    engines: list[str] = table["engine"].astype(str).tolist()
+    costs: list[float] = table["cost_per_page_usd"].astype(float).tolist()
+    latency: list[float] = table["p50_latency_s"].astype(float).tolist()
+    fastest = engines[latency.index(min(latency))]
+    cheapest = engines[costs.index(min(costs))]
+    live_cheapest = SETTINGS.live_run.cheapest_engine
+    verdict = (
+        f"{ENGINE_SHORT[fastest]} is fastest and cheapest"
+        if fastest == cheapest
+        else f"{ENGINE_SHORT[fastest]} is fastest, {ENGINE_SHORT[cheapest]} is cheapest"
     )
-    for _, row in table.iterrows():
+    caveat = (
+        f"; live {ENGINE_SHORT[live_cheapest]} was cheaper"
+        if live_cheapest != cheapest
+        else ""
+    )
+    title = f"Simulated: {verdict}{caveat}"
+    fig, (axis,) = new_figure(title)
+    for engine, cost, seconds in zip(engines, costs, latency, strict=True):
+        axis.scatter(
+            cost,
+            seconds,
+            s=CHART.marker_size**2 * 2,
+            color=color(engine),
+            label=ENGINE_SHORT[engine],
+            zorder=3,
+        )
         axis.annotate(
-            row["engine"], (row["cost_per_page_usd"], row["accuracy_vs_labels"])
+            ENGINE_SHORT[engine],
+            (cost, seconds),
+            xytext=(CHART.label_pad * 2, CHART.label_pad * 2),
+            textcoords="offset points",
+            fontsize=CHART.font_size,
+            color=PALETTE.text,
         )
     axis.set_xscale("log")
-    axis.set_xlabel("model cost per page (USD, log scale)")
-    axis.set_ylabel("route accuracy vs labels")
-    axis.set_title("Engine tradeoff (marker size = p50 latency)")
-    fig.tight_layout()
+    axis.margins(x=0.3, y=0.2)
+    axis.set_ylim(bottom=0)
+    axis.annotate(
+        "better: cheaper and faster",
+        xy=(0.02, 0.03),
+        xytext=(0.2, 0.2),
+        xycoords="axes fraction",
+        textcoords="axes fraction",
+        fontsize=CHART.font_size,
+        color=PALETTE.text,
+        arrowprops={"arrowstyle": "->", "color": PALETTE.text},
+    )
+    style_axis(
+        axis,
+        xlabel="model cost per page (USD, log scale, lower is better)",
+        ylabel="p50 latency (seconds, lower is better)",
+        grid_axis="y",
+    )
+    add_legend(axis, "upper left")
+    return fig
+
+
+def plot_threshold_sweep(sweep: pd.DataFrame) -> Figure:
+    leaks = sweep[sweep["privileged_leaks"] > 0]
+    first_leak = leaks.groupby("engine", sort=False)["privilege_threshold"].min()
+    clean = [
+        ENGINE_SHORT[str(e)] for e in sweep["engine"].unique() if e not in first_leak
+    ]
+    leaking = [
+        f"{ENGINE_SHORT[str(engine)]} leaks privileged pages from {threshold:.2f}"
+        if index == 0
+        else f"{ENGINE_SHORT[str(engine)]} from {threshold:.2f}"
+        for index, (engine, threshold) in enumerate(first_leak.items())
+    ]
+    title = (
+        f"Simulated: {', '.join(leaking)}"
+        + (f"; {', '.join(clean)} never leaks" if clean else "")
+        if leaking
+        else "Simulated: no privileged page leaks at any threshold"
+    )
+    fig, (axis,) = new_figure(title)
+    for engine, group in sweep.groupby("engine", sort=False):
+        name = str(engine)
+        ordered = group.sort_values("privilege_threshold")
+        thresholds: list[float] = ordered["privilege_threshold"].astype(float).tolist()
+        rates: list[float] = ordered["escalation_rate"].astype(float).tolist()
+        axis.plot(
+            thresholds,
+            rates,
+            marker="o",
+            color=color(name),
+            linewidth=CHART.line_width,
+            markersize=CHART.marker_size,
+            zorder=3,
+        )
+        axis.annotate(
+            ENGINE_SHORT[name],
+            (thresholds[-1], rates[-1]),
+            xytext=(CHART.label_pad * 4, 0),
+            textcoords="offset points",
+            va="center",
+            fontsize=CHART.font_size,
+            color=PALETTE.text,
+        )
+    leak_points = zip(
+        leaks["privilege_threshold"].astype(float),
+        leaks["escalation_rate"].astype(float),
+        strict=True,
+    )
+    for threshold, rate in leak_points:
+        axis.plot(
+            threshold,
+            rate,
+            marker="X",
+            color=PALETTE.critical,
+            markersize=CHART.marker_size * 1.6,
+            linestyle="none",
+            zorder=4,
+        )
+    axis.plot(
+        [],
+        [],
+        marker="X",
+        color=PALETTE.critical,
+        linestyle="none",
+        label="✗ a privileged page would be produced",
+        markersize=CHART.marker_size,
+    )
+    axis.set_xlim(0, CHART.threshold_axis_max)
+    axis.yaxis.set_major_formatter(PercentFormatter(1.0))
+    style_axis(
+        axis,
+        xlabel="privilege escalation threshold (a higher threshold escalates less)",
+        ylabel="pages sent to an attorney",
+    )
+    add_legend(axis)
+    return fig
+
+
+def plot_calibration(policy_table: pd.DataFrame) -> Figure:
+    splits = list(dict.fromkeys(policy_table["split"]))
+    leaks = int(
+        policy_table["privileged_leaks"].sum() + policy_table["pii_leaks"].sum()
+    )
+    rate = {
+        (str(policy), str(split)): float(value)
+        for policy, split, value in zip(
+            policy_table["policy"],
+            policy_table["split"],
+            policy_table["escalation_rate"].astype(float),
+            strict=True,
+        )
+    }
+    shift = rate["calibrated", splits[-1]] - rate["default", splits[-1]]
+    fig, (axis,) = new_figure(
+        f"Calibration moves {splits[-1]} escalation by {shift * 100:+.0f} points "
+        f"with {leaks} leaks"
+    )
+    width = CHART.bar_width / 2
+    for offset, policy in ((-width / 2, "default"), (width / 2, "calibrated")):
+        positions = [i + offset for i in range(len(splits))]
+        values = [rate[policy, split] for split in splits]
+        axis.bar(
+            positions,
+            values,
+            width=width,
+            color=color(f"{policy}_policy"),
+            label=f"{policy} thresholds",
+            zorder=3,
+        )
+        label_bars(axis, positions, values, [f"{v:.0%}" for v in values])
+    axis.set_xticks(range(len(splits)))
+    axis.set_xticklabels(splits)
+    axis.margins(y=0.4)
+    axis.set_yticks(np.linspace(0, 1, 6))
+    axis.yaxis.set_major_formatter(PercentFormatter(1.0))
+    axis.annotate(
+        f"{leaks} leaks (privileged or PII) in every run",
+        (0.99, 0.97),
+        xycoords="axes fraction",
+        ha="right",
+        va="top",
+        fontsize=CHART.font_size,
+        color=PALETTE.text,
+        fontweight="bold",
+    )
+    style_axis(axis, ylabel="pages sent to an attorney")
+    add_legend(axis, "upper left")
     return fig

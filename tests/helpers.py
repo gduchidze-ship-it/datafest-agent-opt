@@ -6,6 +6,9 @@ from collections.abc import Callable
 from typing import Any
 
 import pandas as pd
+from matplotlib.axes import Axes
+from matplotlib.colors import to_hex
+from matplotlib.figure import Figure
 
 from doc_review_opt.models import (
     ClassifierResult,
@@ -70,3 +73,16 @@ def at(frame: pd.DataFrame, row: Any, column: str) -> Any:
 
 def row(frame: pd.DataFrame, label: Any) -> Any:
     return frame.loc[label]
+
+
+def assert_clean_chart(fig: Figure, axes: int) -> None:
+    assert isinstance(fig, Figure)
+    assert len(fig.axes) == axes
+    assert fig.get_suptitle()
+    assert all(len(a.get_shared_y_axes().get_siblings(a)) == 1 for a in fig.axes)
+    assert len({a.get_position().bounds for a in fig.axes}) == axes
+    assert all(not a.spines["top"].get_visible() for a in fig.axes)
+
+
+def bar_colors(axis: Axes) -> list[str]:
+    return [to_hex(patch.get_facecolor()) for patch in axis.patches]

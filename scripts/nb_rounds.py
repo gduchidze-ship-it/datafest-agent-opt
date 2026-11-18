@@ -3,7 +3,74 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
-from scripts.cells import Cell, code, md
+from scripts.cells import Cell, code, md, mermaid
+
+ROUND_ONE_DIAGRAM = mermaid(
+    """
+flowchart LR
+    A["All 5 tools<br/>verbose payloads"]:::before --> B["Only the needed tools<br/>slim payloads"]:::after
+    C["Free-text answer"]:::before --> D["Strict JSON answer"]:::after
+""",
+    "before",
+    "after",
+)
+ROUND_TWO_DIAGRAM = mermaid(
+    """
+flowchart LR
+    A["Every page on terra"]:::before --> B["Triage on luna"]:::after
+    B --> C["luna for routine pages"]:::after
+    B --> D["terra for risky pages"]:::after
+""",
+    "before",
+    "after",
+)
+ROUND_THREE_DIAGRAM = mermaid(
+    """
+flowchart LR
+    A["An LLM classifies<br/>every page"]:::before --> B["Decisions call"]:::after
+    B --> C["Code router"]:::after
+    C --> D["terra second opinion<br/>ambiguous band only"]:::after
+""",
+    "before",
+    "after",
+)
+ROUND_FOUR_DIAGRAM = mermaid(
+    """
+flowchart LR
+    A["Page mixed into the prompt<br/>nothing cached"]:::before --> B["Stable protocol prefix<br/>cached"]:::after
+    B --> C["Page<br/>changes every call"]:::after
+""",
+    "before",
+    "after",
+)
+ROUND_FIVE_DIAGRAM = mermaid(
+    """
+flowchart LR
+    subgraph SYNC["Sync path"]
+        C["Classify"]:::after --> R["Route"]:::after --> D["Decide"]:::after
+    end
+    subgraph BATCH["Batch lane at 50 percent off"]
+        L["Privilege log"]:::before
+        Q["QA"]:::before
+        T["Tags"]:::before
+    end
+    D -.-> L
+    D -.-> Q
+    D -.-> T
+""",
+    "before",
+    "after",
+)
+REVIEW_SEQUENCE = """```mermaid
+sequenceDiagram
+    participant G as Graph
+    participant A as Attorney
+    participant R as Result
+    G->>A: interrupt - ids and scores, no page text
+    A->>G: resume - decision
+    G->>G: redact first if PII, then produce
+    G->>R: final route
+```"""
 
 
 def _live_loop() -> list[Cell]:
@@ -62,11 +129,19 @@ else:
 
 def _round_one() -> list[Cell]:
     return [
-        md("""
+        md(
+            """
 ## Round 1: prompt, tool and context controls
 
+"""
+            + ROUND_ONE_DIAGRAM
+            + """
+
+*Left is the baseline, right is the change: fewer tools and a strict answer.*
+
 **Symptom.** The baseline calls every tool on every page, carries large payloads, and returns free text that sometimes cannot be parsed. It fails the personal-data gate.
-"""),
+"""
+        ),
         code("""
 symptoms(BASELINE)
 quality_gate(BASELINE, BASELINE)
@@ -111,19 +186,26 @@ quality_gate(BASELINE, CONTROLS)
 **Tradeoff.** The schema and allow-list are logic you now maintain, and the allow-list uses fixture labels. The strongest model still handles every page, which Round 2 addresses.
 """),
         code("""
-plot_progress(summary, upto_variant=CONTROLS)
-plt.show()
+display(plot_progress(summary, upto_variant=CONTROLS))
 """),
     ]
 
 
 def _round_two() -> list[Cell]:
     return [
-        md("""
+        md(
+            """
 ## Round 2: model selection
 
+"""
+            + ROUND_TWO_DIAGRAM
+            + """
+
+*Look at the split: cheap luna for routine pages, terra only for risky ones.*
+
 **Symptom.** Round 1 spends `gpt-6.1-terra` tokens on obvious pages. Only privileged and borderline pages need the top tier.
-"""),
+"""
+        ),
         code("""
 symptoms(CONTROLS)
 """),
@@ -162,19 +244,26 @@ quality_gate(CONTROLS, ROUTING)
 **Live (2026-11-18, 6 pages).** Round 2 was slower than Round 1 (p50 4.00s against 2.96s) and misrouted one page (quality 0.95). Model cost per page did fall ($0.00039 against $0.00112). The simulated latency gain is a formula, not a measurement.
 """),
         code("""
-plot_progress(summary, upto_variant=ROUTING)
-plt.show()
+display(plot_progress(summary, upto_variant=ROUTING))
 """),
     ]
 
 
 def _round_three() -> list[Cell]:
     return [
-        md("""
+        md(
+            """
 ## Round 3: replace the LLM with a decision model
 
+"""
+            + ROUND_THREE_DIAGRAM
+            + """
+
+*Look at who decides: a typed Decisions call and plain code, with an LLM only on the ambiguous band.*
+
 **Symptom.** The agent still uses an LLM to classify: responsive, privileged, personal data. Its confidence is not a probability and the thresholds are buried in a prompt. This is a typed decision, which the Decisions API answers directly.
-"""),
+"""
+        ),
         code("""
 symptoms(ROUTING)
 """),
@@ -187,19 +276,6 @@ symptoms(ROUTING)
 - otherwise personal data above its threshold is redacted, else produced
 
 An LLM stays only where Decisions cannot help: redaction text (`gpt-6-luna`) and a `gpt-6.1-terra` second opinion on the ambiguous band. A prior-production check in code skips the model call entirely. Thresholds are calibrated on the calibration split, never the holdout.
-
-```mermaid
-flowchart LR
-    A["Page"] --> B["Decisions call (gpt-6-luna): responsive score, privileged, contains_pii"]
-    B --> C["Code router with calibrated thresholds"]
-    C -->|"privileged above threshold"| H["Attorney review"]
-    C -->|"ambiguous band"| S["gpt-6.1-terra second opinion"]
-    S -->|"still unsure"| H
-    S -->|"decided"| C2["Route"]
-    C -->|"clean and responsive"| P["Produce"]
-    C -->|"not responsive"| W["Withhold"]
-    C -->|"personal data"| R["Redact on gpt-6-luna, then produce"]
-```
 
 **Diff.** The Round 2 request next to the Decisions request. The protocol goes first in `input` so it can be cached; the policy lives in each question.
 """),
@@ -401,6 +477,14 @@ display(
 )
 """),
         md("""
+**How to read it.** Each pair is one split. Yellow is the default thresholds, green the calibrated ones.
+"""),
+        code("""
+from doc_review_opt.tradeoffs import plot_calibration
+
+display(plot_calibration(policy_table))
+"""),
+        md("""
 The calibrated policy keeps the privilege threshold unchanged, since cc'd pages already score below 0.2. The simulated original-wording ablation (Round 3b) is where those pages score higher. The grid searches thresholds only, so the quality gate still decides and rejected rounds stay rejected.
 """),
         md("""
@@ -492,19 +576,26 @@ print(decide(refused))
 You also own the thresholds, cannot ask it to explain itself, and its edge mistakes are why a second opinion sits before the attorney. Compare model cost, escalation rate and blended cost per page with Round 2: an extra attorney review costs far more than the model calls it replaces.
 """),
         code("""
-plot_progress(summary, upto_variant=DECISION_MODEL)
-plt.show()
+display(plot_progress(summary, upto_variant=DECISION_MODEL))
 """),
     ]
 
 
 def _round_four_five() -> list[Cell]:
     return [
-        md("""
+        md(
+            """
 ## Round 4: prompt caching
 
+"""
+            + ROUND_FOUR_DIAGRAM
+            + """
+
+*Look at the order: the part that never changes comes first, so it can be cached.*
+
 **Symptom.** Every Decisions call resends the same protocol before the page, billed as ordinary input each time.
-"""),
+"""
+        ),
         code("""
 symptoms(DECISION_MODEL)
 """),
@@ -555,14 +646,21 @@ quality_gate(DECISION_MODEL, CACHING)
 **Live (2026-11-18, 6 pages).** Round 4 cost more than Round 3 ($0.00021 against $0.00008 per page). Cache writes only amortize over volume, such as a steady stream of pages for one matter.
 """),
         code("""
-plot_progress(summary, upto_variant=CACHING)
-plt.show()
+display(plot_progress(summary, upto_variant=CACHING))
 """),
-        md("""
+        md(
+            """
 ## Round 5: split the workflow
 
+"""
+            + ROUND_FIVE_DIAGRAM
+            + """
+
+*Two lanes: the review path stays fast, and the slow jobs run later in Batch.*
+
 **Symptom.** The privilege-log draft, QA sampling and production tags do not change the disposition, yet they sit in the review path.
-"""),
+"""
+        ),
         code("""
 symptoms(CACHING)
 """),
@@ -625,19 +723,64 @@ quality_gate(CACHING, SPLIT)
 **Tradeoff.** Synchronous latency drops (compare p50 with Round 4) while total tokens stay level, at half price. It adds a job queue, result storage and failure handling, so split only work that can wait.
 """),
         code("""
-plot_progress(summary, upto_variant=SPLIT)
-plt.show()
+display(plot_progress(summary, upto_variant=SPLIT))
+"""),
+    ]
+
+
+def _scoreboard() -> list[Cell]:
+    return [
+        md("""
+## Quality across rounds
+
+Three views of the same gate: which versions pass, where the pages end up, and which pages each version gets wrong.
+"""),
+        md("""
+**How to read it.** Each bar is one version. Green passes the gate (at least the floor and zero leaks); red is rejected. The dashed line is the floor.
+"""),
+        code("""
+from doc_review_opt.reporting import plot_quality_gate
+
+gate_rows = []
+for variant in VARIANT_ORDER + EXTRA_VARIANTS:
+    rate, accepted = gate_result(variant)
+    gate_rows.append({"label": VARIANT_LABELS[variant], "pass_rate": rate, "accepted": accepted})
+display(plot_quality_gate(pd.DataFrame(gate_rows), GUARDRAIL_FLOOR))
+"""),
+        md("""
+**How to read it.** Each bar is 100% of the pages. The top bar is what the labels expect; a good round matches it.
+"""),
+        code("""
+from doc_review_opt.reporting import plot_route_mix
+
+display(plot_route_mix(frame, VARIANT_ORDER))
+"""),
+        md("""
+**How to read it.** One row per page, one column per version. Green dot: right route. Red cross: wrong route. Red triangle: a leak.
+"""),
+        code("""
+from doc_review_opt.reporting import plot_scorecard
+
+display(plot_scorecard(frame, VARIANT_ORDER))
 """),
     ]
 
 
 def _human_loop() -> list[Cell]:
     return [
-        md("""
+        md(
+            """
 ## Human in the loop: attorney review
 
+"""
+            + REVIEW_SEQUENCE
+            + """
+
+*Follow the arrows: the graph pauses, only ids and scores go out, and the decision comes back.*
+
 Every page routed to attorney review pauses the graph with `interrupt()` and resumes with the attorney's decision. The payload holds IDs, the reason and scores only, never page text, so a review queue can be logged without leaking privileged content. The next cells inspect the payloads, assert none contains page text, and resume with scripted decisions.
-"""),
+"""
+        ),
         code("""
 from langgraph.types import Command
 
@@ -692,5 +835,6 @@ def cells() -> list[Cell]:
         *_round_two(),
         *_round_three(),
         *_round_four_five(),
+        *_scoreboard(),
         *_human_loop(),
     ]

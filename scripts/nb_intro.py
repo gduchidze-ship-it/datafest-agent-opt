@@ -3,16 +3,75 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
-from scripts.cells import Cell, code, md
+from doc_review_opt.config import get_settings
+from scripts.cells import Cell, code, md, mermaid
+
+POLICY = get_settings().policy.calibrated
+SECOND_OPINION = get_settings().models.second_opinion
+
+LOOP_DIAGRAM = mermaid(
+    """
+flowchart LR
+    A["Version 1"] --> B["Traces"] --> C["Find errors"] --> D["Build evals"] --> E["Tune"] --> F["Climb"]
+    F -.-> C
+"""
+)
+RUNS_DIAGRAM = mermaid(
+    """
+flowchart LR
+    S["Offline simulation<br/>default, free"] --> T["Trace table"]
+    L["Live cells<br/>RUN_LIVE_API_CALLS<br/>1 dollar budget, LangSmith traces"] --> T
+    T --> C["Tables and charts"]
+"""
+)
+BASELINE_DIAGRAM = mermaid(
+    """
+flowchart LR
+    P["Page"] --> A["One terra super-agent<br/>everything runs synchronously"]
+    A <--> T["All 5 tools<br/>verbose payloads"]
+    A --> F["Free-text answer"]
+    A --> L["Privilege log<br/>QA<br/>production tags"]
+    F --> O["Parse the text into a route"]
+""",
+    "before",
+)
+PAGE_DIAGRAM = mermaid(
+    f"""
+flowchart LR
+    P["Page"] --> D["Decisions classify<br/>3 questions"]
+    D --> R["Code router"]
+    R -->|"privilege above {POLICY.privilege_escalation}"| A["Attorney review"]:::attorney
+    R -->|"responsive below {POLICY.not_responsive}"| W["Withhold"]:::withhold
+    R -->|"ambiguous band<br/>{POLICY.not_responsive} to {POLICY.responsive}"| T["{SECOND_OPINION}<br/>second opinion"]
+    T -->|"still unsure"| A
+    T -->|"clear"| U["Produce"]:::produce
+    R -->|"PII above {POLICY.pii_redaction}"| X["Redact"]:::redact
+    R -->|"otherwise"| U
+""",
+    "produce",
+    "withhold",
+    "redact",
+    "attorney",
+)
 
 
 def _opening() -> list[Cell]:
     return [
-        md("""
+        md(
+            """
 # Optimizing document review agents for cost and quality: decision models vs LLMs
 
 This notebook measures a baseline document review agent, changes one thing per round, and accepts the savings only if quality holds. It also asks which steps should be a decision model and which still need an LLM. The default run is an offline simulation on synthetic pages; optional live cells use real APIs under a $1 budget.
-"""),
+
+### The optimization loop
+
+"""
+            + LOOP_DIAGRAM
+            + """
+
+*Follow the arrows left to right; the dashed arrow is why we never stop after one round.*
+"""
+        ),
         md("""
 ## Outline
 
@@ -39,7 +98,8 @@ Five mock tools stand in for real systems: custodian directory, review protocol,
 
 Models: `gpt-6.1-terra` (strongest tier), `gpt-6-luna` (small tier) and the Decisions API, which runs on `gpt-6-luna`. Reasoning is off for every Responses call (`reasoning={"effort": "none"}`), so it is not a knob here.
 """),
-        md("""
+        md(
+            """
 ## Setup
 
 Use Python 3.13, then install and open the notebook:
@@ -60,14 +120,23 @@ export LANGSMITH_TRACING=true       # send traces for the live runs to LangSmith
 ```
 
 Environment values win over `.env`. All live cells share one `BudgetTracker` with a hard $1 stop (limit in `config.toml`). Leave the flags unset for a fully offline run. The Batch example only writes a local file under `outputs/`; it never submits.
-"""),
+
+### How the notebook runs
+
+"""
+            + RUNS_DIAGRAM
+            + """
+
+*Both paths fill the same trace table, so every table and chart below works either way.*
+"""
+        ),
         code("""
+%matplotlib inline
 import inspect
 import json
 import os
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import pandas as pd
 from dotenv import load_dotenv
 from IPython.display import Markdown, display
@@ -176,6 +245,14 @@ display(eval_table.head(10))
 display(eval_table.groupby(["expected_route", "difficulty"]).size().rename("pages").to_frame())
 """),
         md("""
+**How to read it.** Left: how many pages each route should end in. Right: how hard the pages are.
+"""),
+        code("""
+from doc_review_opt.reporting import plot_eval_set
+
+display(plot_eval_set(eval_table))
+"""),
+        md("""
 ## Support data and tools
 
 Five local functions in `review_agent.py` stand in for the matter's systems. The baseline returns oversized payloads; later rounds return only decision-critical fields. The next cell shows one slim custodian record.
@@ -194,29 +271,29 @@ print("Slim custodian payload tokens:", approx_tokens(lookup_custodian(ATTORNEYS
 print("Verbose tool schema tokens:", approx_tokens(VERBOSE_TOOLS))
 print("Slim tool schema tokens:", approx_tokens(SLIM_TOOLS))
 """),
-        md("""
+        md(
+            """
 ## Baseline architecture
 
 The baseline does too much in one synchronous path.
 
-```mermaid
-flowchart LR
-    A["Page (text + metadata)"] --> B["One review super-agent on gpt-6.1-terra"]
-    B --> C["lookup_custodian"]
-    B --> D["lookup_protocol"]
-    B --> E["check_prior_production"]
-    B --> F["apply_redactions / escalate_to_attorney"]
-    B --> G["Free-text disposition"]
-    B --> H["Privilege-log draft"]
-    B --> I["QA check"]
-    B --> J["Production tags"]
-    G --> K["Parse the reply into produce / withhold / attorney review"]
-```
+"""
+            + BASELINE_DIAGRAM
+            + """
+
+*Look at the single box doing every job: that is the cost and latency we will take apart.*
 
 ### The review graph
 
 Every variant runs through the same LangGraph graph. A `Send` fans pages out to one subgraph each; every page is classified, routed in code and ends in one terminal node. `attorney_review` pauses with `interrupt()`. Only IDs and scores cross that boundary, never page text.
-"""),
+
+"""
+            + PAGE_DIAGRAM
+            + """
+
+*Follow one page: three typed answers go in, plain code picks one of four outcomes.*
+"""
+        ),
         code("""
 from doc_review_opt.decisions import RoutingPolicy
 from doc_review_opt.graph import build_review_graph, review_checkpointer
@@ -229,7 +306,7 @@ graph_classifier, graph_redactor = build_simulated_engines(
 review_graph = build_review_graph(
     graph_classifier, graph_redactor, review_checkpointer(), policy=CALIBRATED_POLICY
 )
-print(review_graph.get_graph(xray=True).draw_mermaid())
+print("Graph nodes:", ", ".join(review_graph.get_graph(xray=True).nodes))
 """),
         md("""
 ## Metrics helpers
@@ -352,13 +429,30 @@ show(impact)
         md("""
 ## Cost, latency and quality
 
-Mean synchronous tokens, model cost per page and quality score for each round.
+**How to read it.** Left: tokens per page. Middle: model cost per page on a log scale. Right: quality. Simulated.
 """),
         code("""
 from doc_review_opt.reporting import plot_round_chart
 
-plot_round_chart(summary)
-plt.show()
+display(plot_round_chart(summary))
+"""),
+        md("""
+**How to read it.** Left: model cost per page, with the change from the previous round. Right: median latency.
+"""),
+        code("""
+from doc_review_opt.reporting import plot_cost_latency
+
+display(plot_cost_latency(summary))
+"""),
+        md("""
+### Where the money goes
+
+**How to read it.** Orange is attorney time, blue is the model bill. The model bill is the sliver at the bottom.
+"""),
+        code("""
+from doc_review_opt.reporting import plot_cost_split
+
+display(plot_cost_split(summary))
 """),
     ]
 

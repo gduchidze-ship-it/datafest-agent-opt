@@ -453,3 +453,108 @@ max_escalation_rate = 0.50
 needs_async = true
 cache_locality = "low"
 recommended = ["decisions_split_no_cache", "llm_routed"]
+
+[palette]
+surface = "#fcfcfb"
+text = "#52514e"
+grid = "#e1e0d9"
+ink = "#1a1a18"
+blue = "#2a78d6"
+orange = "#eb6834"
+aqua = "#1baf7a"
+yellow = "#eda100"
+magenta = "#e87ba4"
+green = "#008300"
+good = "#0ca30c"
+critical = "#d03b3b"
+
+[entity_colors]
+produce = "blue"
+withhold = "orange"
+redact = "aqua"
+attorney_review = "yellow"
+decisions = "blue"
+llm-luna = "orange"
+llm-terra = "aqua"
+agent = "yellow"
+simulated = "blue"
+live = "orange"
+model_cost = "blue"
+attorney_cost = "orange"
+sync_tokens = "aqua"
+latency = "magenta"
+quality = "green"
+difficulty = "magenta"
+default_policy = "yellow"
+calibrated_policy = "aqua"
+
+[chart]
+width = 13.0
+height = 4.6
+tall_height = 9.5
+font_size = 12.0
+title_size = 14.0
+line_width = 2.0
+marker_size = 9.0
+bar_width = 0.55
+grid_width = 0.8
+label_pad = 4.0
+min_label_share = 0.08
+log_floor_factor = 0.625
+log_headroom = 2.5
+label_box_pad = 0.15
+threshold_axis_max = 1.0
+
+[live_run]
+date = "2026-11-18"
+pages = 6
+cost_usd = 0.18
+cheapest_engine = "llm-luna"
+
+[[live_run.rounds]]
+variant = "00_bad_baseline"
+quality = 0.84
+escalation_rate = 0.33
+sync_tokens = 16996
+p50_latency_s = 10.92
+model_cost_per_page_usd = 0.02243
+
+[[live_run.rounds]]
+variant = "01_prompt_tool_context_controls"
+quality = 0.98
+escalation_rate = 0.17
+sync_tokens = 942
+p50_latency_s = 2.96
+model_cost_per_page_usd = 0.00112
+
+[[live_run.rounds]]
+variant = "02_model_routing"
+quality = 0.95
+escalation_rate = 0.17
+sync_tokens = 1326
+p50_latency_s = 4.00
+model_cost_per_page_usd = 0.00039
+
+[[live_run.rounds]]
+variant = "03_decision_model"
+quality = 0.98
+escalation_rate = 0.17
+sync_tokens = 1772
+p50_latency_s = 0.45
+model_cost_per_page_usd = 0.00008
+
+[[live_run.rounds]]
+variant = "04_prompt_caching"
+quality = 0.98
+escalation_rate = 0.17
+sync_tokens = 1772
+p50_latency_s = 0.43
+model_cost_per_page_usd = 0.00021
+
+[[live_run.rounds]]
+variant = "05_split_workflow"
+quality = 0.98
+escalation_rate = 0.17
+sync_tokens = 1772
+p50_latency_s = 0.34
+model_cost_per_page_usd = 0.00008
