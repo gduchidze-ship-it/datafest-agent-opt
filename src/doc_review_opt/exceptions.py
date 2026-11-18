@@ -14,6 +14,9 @@ class BudgetExceededError(RuntimeError): ...
 class ConfigError(ValueError): ...
 
 
+class DiagramLayoutError(ValueError): ...
+
+
 class BilledCallError(RuntimeError):
     def __init__(
         self, message: str, usage: TokenUsage | None = None, cost_usd: float = 0.0

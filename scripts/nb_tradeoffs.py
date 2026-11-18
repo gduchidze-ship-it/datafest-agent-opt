@@ -3,42 +3,26 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
-from scripts.cells import Cell, code, md, mermaid
-
-CHOICE_DIAGRAM = mermaid(
-    """
-flowchart TD
-    Q1["Need generated text?"] -->|"yes"| L["Use an LLM"]
-    Q1 -->|"no"| Q2["Need tool calls or<br/>your own JSON schema?"]
-    Q2 -->|"yes"| L
-    Q2 -->|"no"| Q3["Need a typed answer, fast and auditable?<br/>probability, choice or score"]
-    Q3 -->|"yes"| D["Use Decisions"]:::decisions
-    Q3 -->|"no"| L
-    D --> R["Route in code<br/>fail safe to attorney"]
-""",
-    "decisions",
-)
+from scripts.cells import Cell, code, md
 
 
 def _engines() -> list[Cell]:
     return [
-        md(
-            """
+        md("""
 ## Tradeoffs and scenario mapping
 
 This section zooms out. It asks **when a decision model is better and when a step still needs an LLM**, using a step matrix, an engine comparison, a threshold sweep and cascade economics. Then it maps architectures to operating scenarios.
 
 ### Decisions or LLM?
 
-"""
-            + CHOICE_DIAGRAM
-            + """
-
-*Start at the top and answer in order; the first yes decides the engine.*
-
+What to look at: start at the top and answer in order; the first yes decides the engine.
+"""),
+        code("""
+draw_diagram("decisions_or_llm")
+"""),
+        md("""
 The matrix goes through every step of the agent and names the engine that fits.
-"""
-        ),
+"""),
         code("""
 from doc_review_opt.tradeoffs import STEP_MATRIX, WHEN_TO_USE
 

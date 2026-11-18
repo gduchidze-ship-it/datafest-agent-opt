@@ -3,74 +3,7 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
-from scripts.cells import Cell, code, md, mermaid
-
-ROUND_ONE_DIAGRAM = mermaid(
-    """
-flowchart LR
-    A["All 5 tools<br/>verbose payloads"]:::before --> B["Only the needed tools<br/>slim payloads"]:::after
-    C["Free-text answer"]:::before --> D["Strict JSON answer"]:::after
-""",
-    "before",
-    "after",
-)
-ROUND_TWO_DIAGRAM = mermaid(
-    """
-flowchart LR
-    A["Every page on terra"]:::before --> B["Triage on luna"]:::after
-    B --> C["luna for routine pages"]:::after
-    B --> D["terra for risky pages"]:::after
-""",
-    "before",
-    "after",
-)
-ROUND_THREE_DIAGRAM = mermaid(
-    """
-flowchart LR
-    A["An LLM classifies<br/>every page"]:::before --> B["Decisions call"]:::after
-    B --> C["Code router"]:::after
-    C --> D["terra second opinion<br/>ambiguous band only"]:::after
-""",
-    "before",
-    "after",
-)
-ROUND_FOUR_DIAGRAM = mermaid(
-    """
-flowchart LR
-    A["Page mixed into the prompt<br/>nothing cached"]:::before --> B["Stable protocol prefix<br/>cached"]:::after
-    B --> C["Page<br/>changes every call"]:::after
-""",
-    "before",
-    "after",
-)
-ROUND_FIVE_DIAGRAM = mermaid(
-    """
-flowchart LR
-    subgraph SYNC["Sync path"]
-        C["Classify"]:::after --> R["Route"]:::after --> D["Decide"]:::after
-    end
-    subgraph BATCH["Batch lane at 50 percent off"]
-        L["Privilege log"]:::before
-        Q["QA"]:::before
-        T["Tags"]:::before
-    end
-    D -.-> L
-    D -.-> Q
-    D -.-> T
-""",
-    "before",
-    "after",
-)
-REVIEW_SEQUENCE = """```mermaid
-sequenceDiagram
-    participant G as Graph
-    participant A as Attorney
-    participant R as Result
-    G->>A: interrupt - ids and scores, no page text
-    A->>G: resume - decision
-    G->>G: redact first if PII, then produce
-    G->>R: final route
-```"""
+from scripts.cells import Cell, code, md
 
 
 def _live_loop() -> list[Cell]:
@@ -133,15 +66,15 @@ def _round_one() -> list[Cell]:
             """
 ## Round 1: prompt, tool and context controls
 
-"""
-            + ROUND_ONE_DIAGRAM
-            + """
-
-*Left is the baseline, right is the change: fewer tools and a strict answer.*
-
-**Symptom.** The baseline calls every tool on every page, carries large payloads, and returns free text that sometimes cannot be parsed. It fails the personal-data gate.
+What to look at: left is the baseline, right is the change: fewer tools and a strict answer.
 """
         ),
+        code("""
+draw_diagram("round1")
+"""),
+        md("""
+**Symptom.** The baseline calls every tool on every page, carries large payloads, and returns free text that sometimes cannot be parsed. It fails the personal-data gate.
+"""),
         code("""
 symptoms(BASELINE)
 quality_gate(BASELINE, BASELINE)
@@ -197,15 +130,15 @@ def _round_two() -> list[Cell]:
             """
 ## Round 2: model selection
 
-"""
-            + ROUND_TWO_DIAGRAM
-            + """
-
-*Look at the split: cheap luna for routine pages, terra only for risky ones.*
-
-**Symptom.** Round 1 spends `gpt-6.1-terra` tokens on obvious pages. Only privileged and borderline pages need the top tier.
+What to look at: cheap luna for routine pages, terra only for risky ones.
 """
         ),
+        code("""
+draw_diagram("round2")
+"""),
+        md("""
+**Symptom.** Round 1 spends `gpt-6.1-terra` tokens on obvious pages. Only privileged and borderline pages need the top tier.
+"""),
         code("""
 symptoms(CONTROLS)
 """),
@@ -255,15 +188,15 @@ def _round_three() -> list[Cell]:
             """
 ## Round 3: replace the LLM with a decision model
 
-"""
-            + ROUND_THREE_DIAGRAM
-            + """
-
-*Look at who decides: a typed Decisions call and plain code, with an LLM only on the ambiguous band.*
-
-**Symptom.** The agent still uses an LLM to classify: responsive, privileged, personal data. Its confidence is not a probability and the thresholds are buried in a prompt. This is a typed decision, which the Decisions API answers directly.
+What to look at: who decides: a typed Decisions call and plain code, with an LLM only on the ambiguous band.
 """
         ),
+        code("""
+draw_diagram("round3")
+"""),
+        md("""
+**Symptom.** The agent still uses an LLM to classify: responsive, privileged, personal data. Its confidence is not a probability and the thresholds are buried in a prompt. This is a typed decision, which the Decisions API answers directly.
+"""),
         code("""
 symptoms(ROUTING)
 """),
@@ -587,15 +520,15 @@ def _round_four_five() -> list[Cell]:
             """
 ## Round 4: prompt caching
 
-"""
-            + ROUND_FOUR_DIAGRAM
-            + """
-
-*Look at the order: the part that never changes comes first, so it can be cached.*
-
-**Symptom.** Every Decisions call resends the same protocol before the page, billed as ordinary input each time.
+What to look at: the order: the part that never changes comes first, so it can be cached.
 """
         ),
+        code("""
+draw_diagram("round4")
+"""),
+        md("""
+**Symptom.** Every Decisions call resends the same protocol before the page, billed as ordinary input each time.
+"""),
         code("""
 symptoms(DECISION_MODEL)
 """),
@@ -652,15 +585,15 @@ display(plot_progress(summary, upto_variant=CACHING))
             """
 ## Round 5: split the workflow
 
-"""
-            + ROUND_FIVE_DIAGRAM
-            + """
-
-*Two lanes: the review path stays fast, and the slow jobs run later in Batch.*
-
-**Symptom.** The privilege-log draft, QA sampling and production tags do not change the disposition, yet they sit in the review path.
+What to look at: two lanes: the review path stays fast, and the slow jobs run later in Batch.
 """
         ),
+        code("""
+draw_diagram("round5")
+"""),
+        md("""
+**Symptom.** The privilege-log draft, QA sampling and production tags do not change the disposition, yet they sit in the review path.
+"""),
         code("""
 symptoms(CACHING)
 """),
@@ -772,15 +705,15 @@ def _human_loop() -> list[Cell]:
             """
 ## Human in the loop: attorney review
 
-"""
-            + REVIEW_SEQUENCE
-            + """
-
-*Follow the arrows: the graph pauses, only ids and scores go out, and the decision comes back.*
-
-Every page routed to attorney review pauses the graph with `interrupt()` and resumes with the attorney's decision. The payload holds IDs, the reason and scores only, never page text, so a review queue can be logged without leaking privileged content. The next cells inspect the payloads, assert none contains page text, and resume with scripted decisions.
+What to look at: the graph pauses, only ids and scores go out, and the decision comes back.
 """
         ),
+        code("""
+draw_diagram("human_in_the_loop")
+"""),
+        md("""
+Every page routed to attorney review pauses the graph with `interrupt()` and resumes with the attorney's decision. The payload holds IDs, the reason and scores only, never page text, so a review queue can be logged without leaking privileged content. The next cells inspect the payloads, assert none contains page text, and resume with scripted decisions.
+"""),
         code("""
 from langgraph.types import Command
 

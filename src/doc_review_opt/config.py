@@ -8,7 +8,7 @@ from functools import lru_cache
 from importlib.resources import files
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from doc_review_opt.exceptions import ConfigError
 
@@ -228,6 +228,7 @@ class Palette(_Frozen):
     surface: str
     text: str
     grid: str
+    neutral: str
     ink: str
     blue: str
     orange: str
@@ -310,3 +311,121 @@ def parse_settings(raw: Mapping[str, Any]) -> Settings:
 def get_settings() -> Settings:
     text = files("doc_review_opt").joinpath("config.toml").read_text("utf-8")
     return parse_settings(tomllib.loads(text))
+
+
+class DiagramNode(_Frozen):
+    id: str
+    label: str
+    col: float
+    row: float
+    kind: str
+
+
+class DiagramEdge(_Frozen):
+    source: str = Field(alias="from")
+    target: str = Field(alias="to")
+    label: str = ""
+    style: Literal["solid", "dashed"] = "solid"
+    at: float = 0.5
+
+
+class DiagramGroup(_Frozen):
+    label: str
+    nodes: tuple[str, ...]
+
+
+class DiagramSpec(_Frozen):
+    title: str
+    cols: float
+    rows: float
+    nodes: tuple[DiagramNode, ...]
+    edges: tuple[DiagramEdge, ...]
+    groups: tuple[DiagramGroup, ...] = ()
+
+
+class KindStyle(_Frozen):
+    fill: str
+    text: str
+    edge: str | None = None
+
+
+class DiagramLayout(_Frozen):
+    row_height: float
+    top_margin: float
+    bottom_margin: float
+    pad_x: float
+    pad_y: float
+    min_gap: float
+    group_pad: float
+    group_label_pad: float
+    font_size: float
+    label_font_size: float
+    title_size: float
+    line_width: float
+    model_line_width: float
+    arrow_scale: float
+    corner: float
+
+
+class DiagramSettings(_Frozen):
+    layout: DiagramLayout
+    kinds: dict[str, KindStyle]
+    diagrams: dict[str, DiagramSpec]
+
+
+def _placeholders(settings: Settings) -> dict[str, str]:
+    return {
+        **{k: str(v) for k, v in settings.policy.calibrated.model_dump().items()},
+        **settings.models.model_dump(),
+        "batch_off": f"{1 - settings.pricing.batch_discount:.0%}",
+    }
+
+
+def _resolve(spec: DiagramSpec, values: Mapping[str, str]) -> DiagramSpec:
+    ids = {node.id for node in spec.nodes}
+    linked = {end for edge in spec.edges for end in (edge.source, edge.target)}
+    linked |= {node for group in spec.groups for node in group.nodes}
+    if linked - ids:
+        raise ConfigError(f"diagram {spec.title!r} links unknown nodes {linked - ids}")
+    try:
+        nodes = tuple(
+            node.model_copy(update={"label": node.label.format_map(values)})
+            for node in spec.nodes
+        )
+        edges = tuple(
+            edge.model_copy(update={"label": edge.label.format_map(values)})
+            for edge in spec.edges
+        )
+        groups = tuple(
+            group.model_copy(update={"label": group.label.format_map(values)})
+            for group in spec.groups
+        )
+    except KeyError as error:
+        raise ConfigError(
+            f"diagram {spec.title!r}: unknown placeholder {error}"
+        ) from error
+    return spec.model_copy(update={"nodes": nodes, "edges": edges, "groups": groups})
+
+
+def parse_diagrams(raw: Mapping[str, Any], settings: Settings) -> DiagramSettings:
+    try:
+        parsed = DiagramSettings.model_validate(raw)
+    except ValidationError as error:
+        raise ConfigError(f"invalid diagrams.toml: {error}") from error
+    palette = set(settings.palette.model_dump())
+    for kind, style in parsed.kinds.items():
+        if not {style.fill, style.text, style.edge or style.text} <= palette:
+            raise ConfigError(f"diagram kind {kind!r} uses a color not in [palette]")
+    values = _placeholders(settings)
+    diagrams = {name: _resolve(spec, values) for name, spec in parsed.diagrams.items()}
+    for name, spec in diagrams.items():
+        unknown = {node.kind for node in spec.nodes} - set(parsed.kinds)
+        if unknown:
+            raise ConfigError(f"diagram {name!r} uses unknown kinds {unknown}")
+    return parsed.model_copy(update={"diagrams": diagrams})
+
+
+@lru_cache(maxsize=1)
+def get_diagrams() -> DiagramSettings:
+    text = files("doc_review_opt").joinpath("diagrams.toml").read_text("utf-8")
+    return parse_diagrams(tomllib.loads(text), get_settings())

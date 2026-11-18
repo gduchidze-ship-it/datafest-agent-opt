@@ -458,6 +458,7 @@ recommended = ["decisions_split_no_cache", "llm_routed"]
 surface = "#fcfcfb"
 text = "#52514e"
 grid = "#e1e0d9"
+neutral = "#f1f0ec"
 ink = "#1a1a18"
 blue = "#2a78d6"
 orange = "#eb6834"

@@ -3,75 +3,25 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
-from doc_review_opt.config import get_settings
-from scripts.cells import Cell, code, md, mermaid
-
-POLICY = get_settings().policy.calibrated
-SECOND_OPINION = get_settings().models.second_opinion
-
-LOOP_DIAGRAM = mermaid(
-    """
-flowchart LR
-    A["Version 1"] --> B["Traces"] --> C["Find errors"] --> D["Build evals"] --> E["Tune"] --> F["Climb"]
-    F -.-> C
-"""
-)
-RUNS_DIAGRAM = mermaid(
-    """
-flowchart LR
-    S["Offline simulation<br/>default, free"] --> T["Trace table"]
-    L["Live cells<br/>RUN_LIVE_API_CALLS<br/>1 dollar budget, LangSmith traces"] --> T
-    T --> C["Tables and charts"]
-"""
-)
-BASELINE_DIAGRAM = mermaid(
-    """
-flowchart LR
-    P["Page"] --> A["One terra super-agent<br/>everything runs synchronously"]
-    A <--> T["All 5 tools<br/>verbose payloads"]
-    A --> F["Free-text answer"]
-    A --> L["Privilege log<br/>QA<br/>production tags"]
-    F --> O["Parse the text into a route"]
-""",
-    "before",
-)
-PAGE_DIAGRAM = mermaid(
-    f"""
-flowchart LR
-    P["Page"] --> D["Decisions classify<br/>3 questions"]
-    D --> R["Code router"]
-    R -->|"privilege above {POLICY.privilege_escalation}"| A["Attorney review"]:::attorney
-    R -->|"responsive below {POLICY.not_responsive}"| W["Withhold"]:::withhold
-    R -->|"ambiguous band<br/>{POLICY.not_responsive} to {POLICY.responsive}"| T["{SECOND_OPINION}<br/>second opinion"]
-    T -->|"still unsure"| A
-    T -->|"clear"| U["Produce"]:::produce
-    R -->|"PII above {POLICY.pii_redaction}"| X["Redact"]:::redact
-    R -->|"otherwise"| U
-""",
-    "produce",
-    "withhold",
-    "redact",
-    "attorney",
-)
+from scripts.cells import Cell, code, md
 
 
 def _opening() -> list[Cell]:
     return [
-        md(
-            """
+        md("""
 # Optimizing document review agents for cost and quality: decision models vs LLMs
 
 This notebook measures a baseline document review agent, changes one thing per round, and accepts the savings only if quality holds. It also asks which steps should be a decision model and which still need an LLM. The default run is an offline simulation on synthetic pages; optional live cells use real APIs under a $1 budget.
 
 ### The optimization loop
 
-"""
-            + LOOP_DIAGRAM
-            + """
+What to look at: the dashed arrow, which is why we never stop after one round.
+"""),
+        code("""
+from doc_review_opt.diagrams import draw_diagram
 
-*Follow the arrows left to right; the dashed arrow is why we never stop after one round.*
-"""
-        ),
+draw_diagram("optimization_loop")
+"""),
         md("""
 ## Outline
 
@@ -123,13 +73,12 @@ Environment values win over `.env`. All live cells share one `BudgetTracker` wit
 
 ### How the notebook runs
 
-"""
-            + RUNS_DIAGRAM
-            + """
-
-*Both paths fill the same trace table, so every table and chart below works either way.*
+What to look at: both paths fill the same trace table, so every table and chart below works either way.
 """
         ),
+        code("""
+draw_diagram("notebook_modes")
+"""),
         code("""
 %matplotlib inline
 import inspect
@@ -277,23 +226,22 @@ print("Slim tool schema tokens:", approx_tokens(SLIM_TOOLS))
 
 The baseline does too much in one synchronous path.
 
+What to look at: the single box doing every job; that is the cost and latency we will take apart.
 """
-            + BASELINE_DIAGRAM
-            + """
-
-*Look at the single box doing every job: that is the cost and latency we will take apart.*
-
+        ),
+        code("""
+draw_diagram("bad_baseline")
+"""),
+        md("""
 ### The review graph
 
 Every variant runs through the same LangGraph graph. A `Send` fans pages out to one subgraph each; every page is classified, routed in code and ends in one terminal node. `attorney_review` pauses with `interrupt()`. Only IDs and scores cross that boundary, never page text.
 
-"""
-            + PAGE_DIAGRAM
-            + """
-
-*Follow one page: three typed answers go in, plain code picks one of four outcomes.*
-"""
-        ),
+What to look at: follow one page; three typed answers go in, plain code picks one of four outcomes.
+"""),
+        code("""
+draw_diagram("page_review")
+"""),
         code("""
 from doc_review_opt.decisions import RoutingPolicy
 from doc_review_opt.graph import build_review_graph, review_checkpointer

@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from nbclient import NotebookClient
 
+from doc_review_opt.diagrams import list_diagrams
 from scripts.build_notebook import build
 
 FLAGS = ("RUN_LIVE_API_CALLS", "RUN_LLM_JUDGE", "LANGSMITH_TRACING")
@@ -20,6 +21,17 @@ def test_builder_is_deterministic() -> None:
     assert first.cells == second.cells
     assert len(first.cells) >= MIN_CELLS
     assert first.metadata["kernelspec"]["name"] == "python3"
+
+
+def test_diagrams_are_drawn_cells_not_mermaid_blocks() -> None:
+    cells = build().cells
+    assert not [c for c in cells if "```mermaid" in c.source]
+    drawn = [
+        c.source for c in cells if c.cell_type == "code" and "draw_diagram(" in c.source
+    ]
+    assert len(drawn) == len(list_diagrams())
+    for name in list_diagrams():
+        assert any(f'draw_diagram("{name}")' in source for source in drawn)
 
 
 def test_notebook_runs_offline_without_errors_or_warnings(
