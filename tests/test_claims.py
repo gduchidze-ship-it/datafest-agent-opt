@@ -22,9 +22,11 @@ from doc_review_opt.agent.variants import (
     SPLIT,
     VARIANT_ORDER,
 )
+from doc_review_opt.config import LiveRun
 from doc_review_opt.experiment.live import pick_live_pages
 from doc_review_opt.experiment.simulation import simulate_all
 from doc_review_opt.experiment.tradeoffs import (
+    ENGINE_SHORT,
     cascade_analysis,
     simulate_engine_comparison,
     threshold_sweep,
@@ -282,25 +284,90 @@ def test_round_two_text_matches_the_gate(fx: Facts) -> None:
     assert "Cheapest is not best.** Check what each round gives up." in text
 
 
-def test_live_reading_matches_the_recorded_live_run(fx: Facts) -> None:
+def failed_live_claims(run: LiveRun, sim_accuracy: float) -> set[str]:
+    rounds = {r.variant: r for r in run.rounds}
+    engines = {e.engine: e for e in run.engines}
+    routing, controls = rounds[ROUTING], rounds[CONTROLS]
+    decision, caching = rounds[DECISION_MODEL], rounds[CACHING]
+    checks = {
+        "round2_slower": routing.p50_latency_s > controls.p50_latency_s,
+        "round2_lower_quality": routing.quality < controls.quality,
+        "decisions_same_quality": decision.quality == controls.quality,
+        "caching_costlier": caching.model_cost_per_page_usd
+        > decision.model_cost_per_page_usd,
+        "sim_below_perfect": sim_accuracy < 1,
+        "decisions_fastest": min(engines.values(), key=lambda e: e.p50_latency_s).engine
+        == "decisions",
+        "luna_cheapest": min(
+            engines.values(), key=lambda e: e.model_cost_per_page_usd
+        ).engine
+        == run.cheapest_engine
+        == "llm-luna",
+        "decisions_pricier_than_luna": engines["decisions"].model_cost_per_page_usd
+        > engines["llm-luna"].model_cost_per_page_usd,
+    }
+    return {name for name, held in checks.items() if not held}
+
+
+def perturbed(run: LiveRun, variant: str, **fields: float) -> LiveRun:
+    rounds = tuple(
+        r.model_copy(update=fields) if r.variant == variant else r for r in run.rounds
+    )
+    return run.model_copy(update={"rounds": rounds})
+
+
+def perturbed_engine(run: LiveRun, engine: str, **fields: float) -> LiveRun:
+    engines = tuple(
+        e.model_copy(update=fields) if e.engine == engine else e for e in run.engines
+    )
+    return run.model_copy(update={"engines": engines})
+
+
+def test_recorded_live_claims_hold_and_each_check_can_fail(fx: Facts) -> None:
+    run = fx.live_run
+    accuracy = fx.engine("decisions", "accuracy_vs_labels")
+    assert failed_live_claims(run, accuracy) == set()
+    cases = {
+        "round2_slower": perturbed(run, ROUTING, p50_latency_s=0.5),
+        "round2_lower_quality": perturbed(run, ROUTING, quality=0.98),
+        "decisions_same_quality": perturbed(run, DECISION_MODEL, quality=0.9),
+        "caching_costlier": perturbed(run, CACHING, model_cost_per_page_usd=0.00001),
+        "decisions_fastest": perturbed_engine(run, "llm-luna", p50_latency_s=0.1),
+        "luna_cheapest": perturbed_engine(
+            run, "agent", model_cost_per_page_usd=0.00001
+        ),
+        "decisions_pricier_than_luna": perturbed_engine(
+            run, "decisions", model_cost_per_page_usd=0.00005
+        ),
+    }
+    for claim, broken in cases.items():
+        assert claim in failed_live_claims(broken, accuracy)
+    assert "sim_below_perfect" in failed_live_claims(run, 1.0)
+
+
+def test_live_reading_text_quotes_the_recorded_figures(fx: Facts) -> None:
     routing, controls = fx.live(ROUTING), fx.live(CONTROLS)
     decision, caching = fx.live(DECISION_MODEL), fx.live(CACHING)
-    assert routing.p50_latency_s > controls.p50_latency_s
-    assert routing.quality < controls.quality
-    assert caching.model_cost_per_page_usd > decision.model_cost_per_page_usd
-    assert decision.quality == controls.quality
-    assert fx.engine("decisions", "accuracy_vs_labels") < 1
+    fastest, cheapest = fx.live_fastest(), fx.live_cheapest()
     text = demo_text()
     for figure in (
         f"({routing.p50_latency_s:.2f}s vs {controls.p50_latency_s:.2f}s)",
-        f"(quality {routing.quality:.2f})",
+        f"(quality {routing.quality:.2f} vs {controls.quality:.2f})",
+        f"scored the same as Round 1 ({decision.quality:.2f}) on its "
+        f"{fx.live_run.pages} pages",
+        f"{fx.engine('decisions', 'accuracy_vs_labels'):.0%} route accuracy",
         f"(${caching.model_cost_per_page_usd:.5f} vs "
         f"${decision.model_cost_per_page_usd:.5f} per page)",
-        f"its {fx.live_run.pages} pages (quality {decision.quality:.2f})",
-        f"{fx.engine('decisions', 'accuracy_vs_labels'):.0%} route accuracy",
-        "routing was slower and caching cost more",
+        f"{ENGINE_SHORT[fastest.engine]} was the fastest engine "
+        f"({fastest.p50_latency_s:.2f}s)",
+        f"{ENGINE_SHORT[cheapest.engine]} the cheapest "
+        f"(${cheapest.model_cost_per_page_usd:.5f} per page)",
+        "in the live rounds, routing was slower and caching cost more",
     ):
         assert figure in text
+    assert "misroute" not in text.lower()
+    assert "misroute" not in README.lower()
+    assert "the fastest engine and `gpt-6-luna` as an LLM the cheapest" in README
 
 
 TRICKY_IDS = (

@@ -315,7 +315,7 @@ Live run, 2026-11-18, 6 pages (`LIVE_PAGE_LIMIT`), $0.18 of the $1 cap, no error
 |---|---|---|---|---|---|
 | Bad baseline | 0.84 | 33% | 16,996 | 10.92 | 0.02243 |
 | R1 controls | 0.98 | 17% | 942 | 2.96 | 0.00112 |
-| R2 routing | 0.95 (one misroute) | 17% | 1,326 | 4.00 | 0.00039 |
+| R2 routing | 0.95 | 17% | 1,326 | 4.00 | 0.00039 |
 | R3 decision model | 0.98 | 17% | 1,772 | 0.45 | 0.00008 |
 | R4 caching | 0.98 | 17% | 1,772 | 0.43 | 0.00021 |
 | R5 split | 0.98 | 17% | 1,772 | 0.34 | 0.00008 |
@@ -335,7 +335,7 @@ Separate live probe (none of the 6 pages above was attorney-cc'd): Decisions pri
 
 **Where live diverged from the simulation.**
 
-1. **Round 2 was slower, not faster.** p50 4.00s against 2.96s, and one misroute (quality 0.95). Model cost per page still fell ($0.00039 against $0.00112).
+1. **Round 2 was slower, not faster.** p50 4.00s against 2.96s, and lower quality (0.95 against 0.98). Model cost per page still fell ($0.00039 against $0.00112).
 2. **Decisions won on latency, not always price.** About 6x faster but 1.7x pricier than `gpt-6-luna` as an LLM; 4 to 6x cheaper and 6 to 8x faster than `gpt-6.1-terra`. Its other benefits are calibratable probabilities and an auditable router.
 3. **The wording lever was not needed.** The real API scores cc'd mail near 0 with either wording, so the simulated over-escalation (about 0.3) did not reproduce. The protocol wording stays because it is free.
 4. **Round 4 caching cost more** on 6 pages ($0.00021 against $0.00008 per page). It pays only at volume.

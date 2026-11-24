@@ -171,7 +171,7 @@ quality_gate(CONTROLS, ROUTING)
         md("""
 **Tradeoff.** Triage adds tokens to every page, and a wrong triage becomes a wrong escalation. Triage is also an LLM doing classification, which opens the door to Round 3.
 
-**Live (2026-11-18, 6 pages).** Round 2 was slower than Round 1 (p50 4.00s against 2.96s) and misrouted one page (quality 0.95). Model cost per page did fall ($0.00039 against $0.00112). The simulated latency gain is a formula, not a measurement.
+**Live (2026-11-18, 6 pages).** Round 2 was slower than Round 1 (p50 4.00s against 2.96s) and scored lower (quality 0.95 against 0.98). Model cost per page did fall ($0.00039 against $0.00112). The simulated latency gain is a formula, not a measurement.
 """),
         code("""
 display(plot_progress(summary, upto_variant=ROUTING))

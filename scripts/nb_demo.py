@@ -11,6 +11,7 @@ from doc_review_opt.agent.variants import (
     ROUTING,
     SPLIT,
 )
+from doc_review_opt.experiment.tradeoffs import ENGINE_SHORT
 from scripts.cells import Cell, code, md
 from scripts.nb_facts import Facts, facts
 
@@ -503,7 +504,7 @@ display(plot_sim_vs_live(summary, recorded_live_summary(), recorded_live_note())
             hidden=True,
         ),
         md(f"""
-**Reading the live chart.** Live Round 2 was slower than Round 1 ({fx.live(ROUTING).p50_latency_s:.2f}s vs {fx.live(CONTROLS).p50_latency_s:.2f}s) and misrouted a page (quality {fx.live(ROUTING).quality:.2f}). Live Round 4 caching cost more than Round 3 (${fx.live(CACHING).model_cost_per_page_usd:.5f} vs ${fx.live(DECISION_MODEL).model_cost_per_page_usd:.5f} per page). Live Decisions made no misroute on its {fx.live_run.pages} pages (quality {fx.live(DECISION_MODEL).quality:.2f}), while the {fx.pages}-page simulation shows {fx.engine("decisions", "accuracy_vs_labels"):.0%} route accuracy for Decisions alone.
+**Reading the live chart.** Live Round 2 was slower than Round 1 ({fx.live(ROUTING).p50_latency_s:.2f}s vs {fx.live(CONTROLS).p50_latency_s:.2f}s) and scored lower (quality {fx.live(ROUTING).quality:.2f} vs {fx.live(CONTROLS).quality:.2f}). Live Decisions scored the same as Round 1 ({fx.live(DECISION_MODEL).quality:.2f}) on its {fx.live_run.pages} pages, while the {fx.pages}-page simulation shows {fx.engine("decisions", "accuracy_vs_labels"):.0%} route accuracy for Decisions alone. Live Round 4 caching cost more than Round 3 (${fx.live(CACHING).model_cost_per_page_usd:.5f} vs ${fx.live(DECISION_MODEL).model_cost_per_page_usd:.5f} per page).
 """),
         md("""
 Optional, on stage: rerun the engine comparison on the real APIs. It takes about a minute, costs a few cents and sends LangSmith traces.
@@ -528,8 +529,9 @@ else:
 
 
 def _closing() -> list[Cell]:
+    fx = facts()
     return [
-        md("""
+        md(f"""
 ## Step 14: Takeaways
 
 1. **Measure first.** A labelled eval set and hard gates before any tuning.
@@ -537,7 +539,7 @@ def _closing() -> list[Cell]:
 3. **Cheapest is not best.** Check what each round gives up.
 4. **Typed decision? Try Decisions with a code router.** Fast, calibratable, auditable.
 5. **Need text, tools or extraction? Keep an LLM**, the smallest that holds quality.
-6. **Re-measure live.** Live, routing was slower and caching cost more; Decisions was fastest, but the smallest LLM was cheaper.
+6. **Re-measure live.** In the live engine comparison, {ENGINE_SHORT[fx.live_fastest().engine]} was the fastest engine ({fx.live_fastest().p50_latency_s:.2f}s) and {ENGINE_SHORT[fx.live_cheapest().engine]} the cheapest (${fx.live_cheapest().model_cost_per_page_usd:.5f} per page); in the live rounds, routing was slower and caching cost more.
 """),
         md("""
 ## References

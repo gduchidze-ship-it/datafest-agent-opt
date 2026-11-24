@@ -569,3 +569,27 @@ escalation_rate = 0.17
 sync_tokens = 1772
 p50_latency_s = 0.34
 model_cost_per_page_usd = 0.00008
+
+[[live_run.engines]]
+engine = "decisions"
+accuracy = 1.0
+model_cost_per_page_usd = 0.00019
+p50_latency_s = 0.38
+
+[[live_run.engines]]
+engine = "llm-luna"
+accuracy = 1.0
+model_cost_per_page_usd = 0.00011
+p50_latency_s = 2.26
+
+[[live_run.engines]]
+engine = "llm-terra"
+accuracy = 1.0
+model_cost_per_page_usd = 0.00073
+p50_latency_s = 3.03
+
+[[live_run.engines]]
+engine = "agent"
+accuracy = 1.0
+model_cost_per_page_usd = 0.00118
+p50_latency_s = 2.33

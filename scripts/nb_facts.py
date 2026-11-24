@@ -9,7 +9,7 @@ from functools import lru_cache
 import pandas as pd
 
 from doc_review_opt.agent.variants import CALIBRATED_POLICY, VARIANT_ORDER
-from doc_review_opt.config import LiveRound, LiveRun, get_settings
+from doc_review_opt.config import LiveEngine, LiveRound, LiveRun, get_settings
 from doc_review_opt.experiment.metrics import (
     HoldoutReport,
     VariantMetrics,
@@ -52,6 +52,12 @@ class Facts:
 
     def live(self, variant: str) -> LiveRound:
         return next(r for r in self.live_run.rounds if r.variant == variant)
+
+    def live_fastest(self) -> LiveEngine:
+        return min(self.live_run.engines, key=lambda e: e.p50_latency_s)
+
+    def live_cheapest(self) -> LiveEngine:
+        return min(self.live_run.engines, key=lambda e: e.model_cost_per_page_usd)
 
     def engine(self, name: str, column: str) -> float:
         row = self.engines.loc[self.engines["engine"] == name, column]

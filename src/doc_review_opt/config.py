@@ -278,12 +278,20 @@ class LiveRound(_Frozen):
     model_cost_per_page_usd: float
 
 
+class LiveEngine(_Frozen):
+    engine: str
+    accuracy: float
+    model_cost_per_page_usd: float
+    p50_latency_s: float
+
+
 class LiveRun(_Frozen):
     date: str
     pages: int
     cost_usd: float
     cheapest_engine: str
     rounds: tuple[LiveRound, ...]
+    engines: tuple[LiveEngine, ...]
 
 
 class Settings(_Frozen):

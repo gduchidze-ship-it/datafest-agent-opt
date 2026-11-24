@@ -57,7 +57,7 @@ The notebook is built around the "make evals a first-class citizen" loop: versio
 | **Version 1** | `00_bad_baseline`, a deliberately wasteful `gpt-6.1-terra` super-agent, measured first | Done |
 | **Traces** | One `Trace` row per page per round, with the same schema offline and live (`traces.py`). Live runs also go to LangSmith | Done |
 | **Find errors** | `deterministic_guardrail_check` failure codes, judge disagreements, and each round's "Symptom" step, which reads the previous round's traces | Done |
-| **Build evals** | The 60-page eval set, guardrails and judge exist, but they were designed up front. Errors found in traces (for example the live Round 2 misroute) are not yet turned into new regression cases | **Partial** |
+| **Build evals** | The 60-page eval set, guardrails and judge exist, but they were designed up front. Errors found in traces (for example the live Round 2 quality drop) are not yet turned into new regression cases | **Partial** |
 | **Tune** | One lever per round, threshold calibration on the calibration split checked on holdout, and the privilege-question wording lever | Done |
 | **Climb** | `round_impact` deltas, the "progress so far" chart after every round, and the quality gate deciding ACCEPTED or REJECTED | Done |
 
@@ -176,7 +176,7 @@ Live run, 2026-11-18, `LIVE_PAGE_LIMIT` = 6 pages chosen from the original 30-pa
 |---|---|---|---|---|---|
 | Bad baseline | 0.84 | 33% | 16,996 | 10.92 | 0.02243 |
 | R1 controls | 0.98 | 17% | 942 | 2.96 | 0.00112 |
-| R2 routing | 0.95 (one misroute) | 17% | 1,326 | 4.00 | 0.00039 |
+| R2 routing | 0.95 | 17% | 1,326 | 4.00 | 0.00039 |
 | R3 decision model | 0.98 | 17% | 1,772 | 0.45 | 0.00008 |
 | R4 caching | 0.98 | 17% | 1,772 | 0.43 | 0.00021 |
 | R5 split | 0.98 | 17% | 1,772 | 0.34 | 0.00008 |
@@ -196,8 +196,8 @@ Separate live probe (none of the 6 pages above was attorney-cc'd): Decisions pri
 
 Where the live run diverged from the simulation:
 
-1. **Round 2 routing was slower, not faster.** The extra triage call made Round 2 slower than Round 1 (p50 4.00s against 2.96s) and caused one misroute (quality 0.95). Per-page model cost did fall ($0.00039 against $0.00112).
-2. **Decisions beat the LLMs on latency, not always on price.** Live, Decisions was about 6x faster than `gpt-6-luna` as an LLM classifier but about 1.7x more expensive per page. Against `gpt-6.1-terra` it was 4 to 6x cheaper and 6 to 8x faster. Its other advantages, calibratable probabilities and an auditable router, are not price.
+1. **Round 2 routing was slower, not faster.** The extra triage call made Round 2 slower than Round 1 (p50 4.00s against 2.96s) and scored lower (quality 0.95 against 0.98). Per-page model cost did fall ($0.00039 against $0.00112).
+2. **Decisions beat the LLMs on latency, not always on price.** In the live engine comparison Decisions was the fastest engine and `gpt-6-luna` as an LLM the cheapest; Decisions was about 6x faster than `gpt-6-luna` as an LLM classifier but about 1.7x more expensive per page. Against `gpt-6.1-terra` it was 4 to 6x cheaper and 6 to 8x faster. Its other advantages, calibratable probabilities and an auditable router, are not price.
 3. **The wording lever was not needed live.** The real Decisions API already scores attorney-cc'd mail near 0 for privilege with either wording, so the simulated gist-wording over-escalation (about 0.3) did not reproduce. The `03b` ablation is a simulation-only illustration. The protocol wording stays: it is free and matches the protocol.
 4. **Round 4 caching cost more than Round 3** on 6 pages ($0.00021 against $0.00008 per page). Cache writes are billed at 1.25x and only amortize over volume; caching pays off when the same prefix is reused many times within the cache lifetime, not on a short demo run.
 
