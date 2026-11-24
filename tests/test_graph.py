@@ -9,19 +9,19 @@ import httpx2
 import pytest
 from langgraph.types import Command
 
-from doc_review_opt.decisions import DecisionsClassifier
-from doc_review_opt.graph import (
+from doc_review_opt.agent.classifiers.decisions import DecisionsClassifier
+from doc_review_opt.agent.graph import (
     BatchOutcome,
-    InvalidAttorneyDecisionError,
-    OpenAIRedactor,
     ReviewGraph,
     build_review_graph,
     review_checkpointer,
     run_batch,
 )
+from doc_review_opt.agent.nodes import InvalidAttorneyDecisionError
+from doc_review_opt.agent.redactor import OpenAIRedactor
+from doc_review_opt.experiment.simulation import SimulatedRedactor
+from doc_review_opt.fixtures import EVAL_SET
 from doc_review_opt.models import ClassifierResult, ReviewPage
-from doc_review_opt.review_agent import EVAL_SET
-from doc_review_opt.simulation import SimulatedRedactor
 from tests.helpers import (
     PAGE,
     REDACTED_TEXT,

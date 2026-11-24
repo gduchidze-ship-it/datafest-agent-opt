@@ -24,7 +24,7 @@ draw_diagram("decisions_or_llm")
 The matrix goes through every step of the agent and names the engine that fits.
 """),
         code("""
-from doc_review_opt.tradeoffs import STEP_MATRIX, WHEN_TO_USE
+from doc_review_opt.experiment.tradeoffs import STEP_MATRIX, WHEN_TO_USE
 
 display(pd.DataFrame(STEP_MATRIX))
 """),
@@ -56,7 +56,7 @@ display(
 **Live engine comparison (optional).** With `RUN_LIVE_API_CALLS=true` the four engines run on real APIs over `LIVE_PAGE_LIMIT` pages. With `LANGSMITH_TRACING=true` each run is one trace named `doc_review::<engine>`. The $1 budget still applies.
 """),
         code("""
-from doc_review_opt.tradeoffs import live_engine_comparison, plot_engine_tradeoff
+from doc_review_opt.experiment.tradeoffs import live_engine_comparison, plot_engine_tradeoff
 
 live_engine_runs = {}
 if RUN_LIVE_API_CALLS:
@@ -85,7 +85,7 @@ display(plot_engine_tradeoff(engine_comparison_table(engine_runs_calibrated)))
 **Threshold sweep.** A lower privilege threshold escalates more and leaks fewer privileged pages. Each engine needs its own operating point. **How to read it:** each line is one engine; a red cross marks a threshold where a privileged page would be produced.
 """),
         code("""
-from doc_review_opt.tradeoffs import plot_threshold_sweep, threshold_sweep
+from doc_review_opt.experiment.tradeoffs import plot_threshold_sweep, threshold_sweep
 
 sweep = threshold_sweep(engine_runs_default, EVAL_SET)
 for column, fmt in (("escalation_rate", "{:.0%}"), ("privileged_leaks", "{:.0f}")):
@@ -101,7 +101,7 @@ display(plot_threshold_sweep(sweep))
 **Cascade economics (simulated).** Decisions alone has the lowest model cost, but its extra mistakes cost attorney time. A `gpt-6.1-terra` second opinion on the ambiguous band costs a little more and cuts escalations. `gpt-6.1-terra` on everything costs several times more for no better quality. `blended` includes attorney time.
 """),
         code("""
-from doc_review_opt.tradeoffs import cascade_analysis
+from doc_review_opt.experiment.tradeoffs import cascade_analysis
 
 cascade = await cascade_analysis()
 display(
@@ -132,7 +132,7 @@ def _scenarios() -> list[Cell]:
 Each row turns a sprint outcome into an architecture: models, tools, caching, and whether slow work is split off.
 """),
         code("""
-from doc_review_opt.scenarios import (
+from doc_review_opt.experiment.scenarios import (
     ARCHITECTURE_OPTIONS,
     OPERATING_SCENARIOS,
     best_fit,
@@ -210,7 +210,7 @@ Deterministic guardrails run on every trace and need no model. They check:
 - **efficiency:** too many unnecessary tool calls
 """),
         code("""
-from doc_review_opt.evaluation import evaluate_answer_traces, summarize_answer_evals
+from doc_review_opt.experiment.evaluation import evaluate_answer_traces, summarize_answer_evals
 
 main_traces = [trace for trace in traces if trace.variant in VARIANT_ORDER]
 guard_results = await evaluate_answer_traces(EVAL_SET, main_traces)
@@ -341,7 +341,7 @@ Live Decisions privileged probability on the two attorney-cc'd mails (original w
 **How to read it.** Blue is the simulation, orange is the measured live run. The recorded values are the table above; a live session in this notebook replaces them.
 """),
         code("""
-from doc_review_opt.reporting import plot_sim_vs_live, recorded_live_note, recorded_live_summary
+from doc_review_opt.reporting.reporting import plot_sim_vs_live, recorded_live_note, recorded_live_summary
 
 if live_runs:
     live_view, live_note = live_summary, f"live: {LIVE_PAGE_LIMIT} pages, this session"

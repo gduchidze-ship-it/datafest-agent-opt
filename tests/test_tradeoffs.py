@@ -8,16 +8,21 @@ import pandas as pd
 import pytest
 from matplotlib.colors import to_hex
 
-from doc_review_opt.chart_style import PALETTE
+from doc_review_opt.agent.graph import (
+    build_review_graph,
+    review_checkpointer,
+    run_batch,
+)
+from doc_review_opt.agent.routing import DEFAULT_POLICY, RoutingPolicy
+from doc_review_opt.agent.variants import CALIBRATED_POLICY
 from doc_review_opt.config import get_settings
-from doc_review_opt.decisions import DEFAULT_POLICY, RoutingPolicy
-from doc_review_opt.graph import build_review_graph, review_checkpointer, run_batch
-from doc_review_opt.live_api import LIVE_PAGE_LIMIT, BudgetTracker
-from doc_review_opt.models import ClassifierResult
-from doc_review_opt.review_agent import CALIBRATION, EVAL_SET, HOLDOUT
-from doc_review_opt.runs import ReviewRun, scripted_attorney_decisions
-from doc_review_opt.simulation import SimulatedRedactor, SimulatedTypedClassifier
-from doc_review_opt.tradeoffs import (
+from doc_review_opt.experiment.live import LIVE_PAGE_LIMIT, BudgetTracker
+from doc_review_opt.experiment.runs import ReviewRun, scripted_attorney_decisions
+from doc_review_opt.experiment.simulation import (
+    SimulatedRedactor,
+    SimulatedTypedClassifier,
+)
+from doc_review_opt.experiment.tradeoffs import (
     STEP_MATRIX,
     WHEN_TO_USE,
     NoFeasiblePolicyError,
@@ -34,7 +39,9 @@ from doc_review_opt.tradeoffs import (
     simulate_engine_comparison,
     threshold_sweep,
 )
-from doc_review_opt.variants import CALIBRATED_POLICY
+from doc_review_opt.fixtures import CALIBRATION, EVAL_SET, HOLDOUT
+from doc_review_opt.models import ClassifierResult
+from doc_review_opt.reporting.chart_style import PALETTE
 from tests.helpers import assert_clean_chart, at, bar_colors, row
 from tests.test_decisions_classifier import OK_ANSWERS, client_for, decisions_body
 

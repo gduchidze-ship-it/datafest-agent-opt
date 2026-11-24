@@ -6,8 +6,7 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from doc_review_opt.reporting import summarize
-from doc_review_opt.scenarios import (
+from doc_review_opt.experiment.scenarios import (
     ARCHITECTURE_OPTIONS,
     OPERATING_SCENARIOS,
     architecture_metrics,
@@ -15,8 +14,9 @@ from doc_review_opt.scenarios import (
     scenario_fit_score,
     scenario_map,
 )
-from doc_review_opt.simulation import simulate_all
-from doc_review_opt.traces import traces_frame
+from doc_review_opt.experiment.simulation import simulate_all
+from doc_review_opt.experiment.traces import traces_frame
+from doc_review_opt.reporting.reporting import summarize
 
 
 @pytest.fixture(scope="module")

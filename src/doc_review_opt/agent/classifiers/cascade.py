@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from doc_review_opt.decisions import DEFAULT_POLICY, RoutingPolicy, decide
-from doc_review_opt.graph import Classifier
+from doc_review_opt.agent.protocols import Classifier
+from doc_review_opt.agent.routing import DEFAULT_POLICY, RoutingPolicy, decide
+from doc_review_opt.agent.tools import check_prior_production
 from doc_review_opt.models import ClassifierResult, PredicateAnswer, ReviewPage
-from doc_review_opt.review_agent import check_prior_production
 
 RESPONSIVE_BAND_REASONS = frozenset(
     {"ambiguous_responsiveness", "low_responsive_confidence"}

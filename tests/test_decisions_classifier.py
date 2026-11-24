@@ -7,23 +7,23 @@ import httpx2
 import pytest
 from openai import AsyncOpenAI
 
-from doc_review_opt.decisions import (
+from doc_review_opt.agent.classifiers.decisions import (
     GIST_PRIVILEGE_INSTRUCTIONS,
     PROTOCOL_PRIVILEGE_INSTRUCTIONS,
     QUESTIONS,
     DecisionsClassifier,
     build_decisions_request,
     questions,
-    route,
 )
-from doc_review_opt.llm_classifier import (
+from doc_review_opt.agent.classifiers.llm_probability import (
     LLMProbabilityClassifier,
     confidence,
     normalize,
 )
+from doc_review_opt.agent.routing import route
+from doc_review_opt.fixtures import PROTOCOL
 from doc_review_opt.models import PredicateAnswer, RefusalAnswer, ScoreAnswer
 from doc_review_opt.pricing import UnknownModelError
-from doc_review_opt.review_agent import PROTOCOL
 from tests.helpers import PAGE
 
 USAGE = {
@@ -335,7 +335,9 @@ async def test_llm_classifier_levels_follow_the_decisions_rubric(
         extra = {"label": "extra", "description": "Extra level."}
         return ({**first, "levels": [*first["levels"], extra]}, *rest)
 
-    monkeypatch.setattr("doc_review_opt.llm_classifier.questions", four_levels)
+    monkeypatch.setattr(
+        "doc_review_opt.agent.classifiers.llm_probability.questions", four_levels
+    )
     seen: list[str] = []
     reply = {
         "responsive_probabilities": [0.1, 0.2, 0.3, 0.4],

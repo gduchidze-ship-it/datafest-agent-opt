@@ -11,15 +11,16 @@ def _live_loop() -> list[Cell]:
         md("""
 ## Optional: live tool loop
 
-The live helper in [live_api.py](../src/doc_review_opt/live_api.py) keeps reasoning and tool-call items between calls. After `max_tool_rounds` it sets `tool_choice="none"`. An incomplete or unparseable reply counts as a parse failure and the page goes to an attorney.
+The live helper in [tool_agent.py](../src/doc_review_opt/agent/classifiers/tool_agent.py) keeps reasoning and tool-call items between calls. After `max_tool_rounds` it sets `tool_choice="none"`. An incomplete or unparseable reply counts as a parse failure and the page goes to an attorney.
 
 The example takes allowed tools from fixture labels; use evaluated logic in production. Live runs use the same graph and checks as the simulation, and every call is charged to the $1 budget.
 """),
         code("""
 from itertools import zip_longest
 
+from doc_review_opt.agent.classifiers.tool_agent import live_config_for_page
 from doc_review_opt.exceptions import BudgetExceededError
-from doc_review_opt.live_api import live_config_for_page, run_live_variant
+from doc_review_opt.experiment.live import run_live_variant
 
 by_route = {}
 for page in EVAL_SET:
@@ -95,7 +96,7 @@ Expected: far fewer tokens and no parse failures.
 show_diff(BASELINE, CONTROLS, SAMPLE_PAGE)
 """),
         code("""
-from doc_review_opt.review_agent import BAD_BASELINE_PROMPT, CONTROLLED_PROMPT
+from doc_review_opt.agent.prompts import BAD_BASELINE_PROMPT, CONTROLLED_PROMPT
 
 print("--- baseline prompt ---")
 print(BAD_BASELINE_PROMPT)
@@ -154,7 +155,7 @@ print("High-risk page:")
 show_diff(CONTROLS, ROUTING, HIGH_PAGE)
 """),
         code("""
-from doc_review_opt.live_api import triage_request
+from doc_review_opt.agent.classifiers.tool_agent import triage_request
 
 print(json.dumps(short_json(triage_request(LOW_PAGE), 220), indent=2))
 """),
@@ -213,13 +214,15 @@ An LLM stays only where Decisions cannot help: redaction text (`gpt-6-luna`) and
 **Diff.** The Round 2 request next to the Decisions request. The protocol goes first in `input` so it can be cached; the policy lives in each question.
 """),
         code("""
-from doc_review_opt.decisions import (
+from doc_review_opt.agent.classifiers.decisions import (
     DECISIONS_MODEL,
-    DEFAULT_POLICY,
     build_decisions_request,
+)
+from doc_review_opt.agent.routing import (
+    DEFAULT_POLICY,
     decide,
 )
-from doc_review_opt.review_agent import PROTOCOL
+from doc_review_opt.fixtures import PROTOCOL
 
 show_diff(ROUTING, DECISION_MODEL, SAMPLE_PAGE)
 print(json.dumps(short_json(build_decisions_request(SAMPLE_PAGE, PROTOCOL), 200), indent=2))
@@ -228,15 +231,15 @@ print(json.dumps(short_json(build_decisions_request(SAMPLE_PAGE, PROTOCOL), 200)
 The typed answer for the same page (simulated): a `score` with level probabilities and a confidence, and one probability per predicate.
 """),
         code("""
-from doc_review_opt.simulation import SimulatedTypedClassifier
+from doc_review_opt.experiment.simulation import SimulatedTypedClassifier
 
 sample = await SimulatedTypedClassifier("decisions").classify(SAMPLE_PAGE, PROTOCOL)
 print(sample.model_dump_json(indent=2))
 """),
         code("""
 if RUN_LIVE_API_CALLS:
-    from doc_review_opt.decisions import DecisionsClassifier
-    from doc_review_opt.live_api import BudgetedClassifier
+    from doc_review_opt.agent.classifiers.decisions import DecisionsClassifier
+    from doc_review_opt.experiment.live import BudgetedClassifier
 
     budget.check()
     live_sample = await BudgetedClassifier(DecisionsClassifier(client), budget).classify(
@@ -290,7 +293,7 @@ quality_gate(ROUTING, ROUTER_ONLY)
         code("""
 import difflib
 
-from doc_review_opt.decisions import (
+from doc_review_opt.agent.classifiers.decisions import (
     ORIGINAL_PRIVILEGE_INSTRUCTIONS,
     PROTOCOL_PRIVILEGE_INSTRUCTIONS,
 )
@@ -336,13 +339,13 @@ print()
 quality_gate(ROUTING, ORIGINAL_WORDING_VARIANT)
 """),
         code("""
-from doc_review_opt.decisions import ORIGINAL_WORDING
-from doc_review_opt.simulation import simulated_answers
+from doc_review_opt.agent.classifiers.decisions import ORIGINAL_WORDING
+from doc_review_opt.experiment.simulation import simulated_answers
 
 cc_pages = [page for page in EVAL_SET if page.cc and not page.labels.privileged]
 if RUN_LIVE_API_CALLS:
-    from doc_review_opt.decisions import DecisionsClassifier
-    from doc_review_opt.live_api import BudgetedClassifier
+    from doc_review_opt.agent.classifiers.decisions import DecisionsClassifier
+    from doc_review_opt.experiment.live import BudgetedClassifier
 
     budget.check(reserve_usd=2 * len(cc_pages) * LIVE.per_page_ceiling_usd)
     for page in cc_pages:
@@ -371,13 +374,13 @@ The default privilege threshold of 0.2 was tuned for another engine. `calibrate_
 Under the protocol wording, cc'd business mail already scores below 0.2 for privilege, so a higher bar has little to gain. The printout shows the picked threshold next to the default. In production, recalibrate whenever the engine, prompt or matter changes.
 """),
         code("""
-from doc_review_opt.review_agent import CALIBRATION, HOLDOUT
-from doc_review_opt.tradeoffs import (
+from doc_review_opt.experiment.tradeoffs import (
     calibrate_policy,
     engine_comparison_table,
     policy_report,
     simulate_engine_comparison,
 )
+from doc_review_opt.fixtures import CALIBRATION, HOLDOUT
 
 engine_runs_default = await simulate_engine_comparison()
 engine_runs_calibrated = await simulate_engine_comparison(policy=CALIBRATED_POLICY)
@@ -413,7 +416,7 @@ display(
 **How to read it.** Each pair is one split. Yellow is the default thresholds, green the calibrated ones.
 """),
         code("""
-from doc_review_opt.tradeoffs import plot_calibration
+from doc_review_opt.experiment.tradeoffs import plot_calibration
 
 display(plot_calibration(policy_table))
 """),
@@ -544,8 +547,8 @@ symptoms(DECISION_MODEL)
 **Diff.**
 """),
         code("""
-from doc_review_opt.decisions import QUESTIONS, protocol_block
-from doc_review_opt.live_api import CACHE_KEY
+from doc_review_opt.agent.classifiers.decisions import QUESTIONS, protocol_block
+from doc_review_opt.experiment.live import CACHE_KEY
 from doc_review_opt.pricing import CACHE_MIN_TOKENS
 
 print(f"Stable protocol prefix: about {approx_tokens(protocol_block(PROTOCOL)):,} tokens (minimum for caching: {CACHE_MIN_TOKENS:,})")
@@ -605,7 +608,7 @@ symptoms(CACHING)
         code("""
 from collections import Counter
 
-from doc_review_opt.batch import build_background_batch, write_batch_jsonl
+from doc_review_opt.experiment.batch import build_background_batch, write_batch_jsonl
 
 batch_rows = build_background_batch(EVAL_SET, TRACES[SPLIT])
 batch_path = write_batch_jsonl(batch_rows, OUTPUT_DIR / "background_batch.jsonl")
@@ -672,7 +675,7 @@ Three views of the same gate: which versions pass, where the pages end up, and w
 **How to read it.** Each bar is one version. Green passes the gate (at least the floor and zero leaks); red is rejected. The dashed line is the floor.
 """),
         code("""
-from doc_review_opt.reporting import plot_quality_gate
+from doc_review_opt.reporting.reporting import plot_quality_gate
 
 gate_rows = []
 for variant in VARIANT_ORDER + EXTRA_VARIANTS:
@@ -684,7 +687,7 @@ display(plot_quality_gate(pd.DataFrame(gate_rows), GUARDRAIL_FLOOR))
 **How to read it.** Each bar is 100% of the pages. The top bar is what the labels expect; a good round matches it.
 """),
         code("""
-from doc_review_opt.reporting import plot_route_mix
+from doc_review_opt.reporting.reporting import plot_route_mix
 
 display(plot_route_mix(frame, VARIANT_ORDER))
 """),
@@ -692,7 +695,7 @@ display(plot_route_mix(frame, VARIANT_ORDER))
 **How to read it.** One row per page, one column per version. Green dot: right route. Red cross: wrong route. Red triangle: a leak.
 """),
         code("""
-from doc_review_opt.reporting import plot_scorecard
+from doc_review_opt.reporting.reporting import plot_scorecard
 
 display(plot_scorecard(frame, VARIANT_ORDER))
 """),
@@ -717,7 +720,7 @@ Every page routed to attorney review pauses the graph with `interrupt()` and res
         code("""
 from langgraph.types import Command
 
-from doc_review_opt.runs import scripted_attorney_decisions
+from doc_review_opt.experiment.runs import scripted_attorney_decisions
 
 escalating = [page for page in EVAL_SET if page.labels.must_escalate][:3]
 clean = [page for page in EVAL_SET if not page.labels.must_escalate][:1]

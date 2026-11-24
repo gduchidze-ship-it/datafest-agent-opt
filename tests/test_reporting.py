@@ -7,9 +7,13 @@ import pandas as pd
 import pytest
 from matplotlib.colors import to_hex
 
-from doc_review_opt.chart_style import PALETTE, color, signed_percent
+from doc_review_opt.agent.variants import BASELINE, CONTROLS, VARIANT_ORDER
 from doc_review_opt.config import get_settings
-from doc_review_opt.reporting import (
+from doc_review_opt.experiment.simulation import simulate_all
+from doc_review_opt.experiment.traces import traces_frame
+from doc_review_opt.fixtures import EVAL_SET
+from doc_review_opt.reporting.chart_style import PALETTE, color, signed_percent
+from doc_review_opt.reporting.reporting import (
     per_page_view,
     plot_cost_latency,
     plot_cost_split,
@@ -25,10 +29,6 @@ from doc_review_opt.reporting import (
     round_impact,
     summarize,
 )
-from doc_review_opt.review_agent import EVAL_SET
-from doc_review_opt.simulation import simulate_all
-from doc_review_opt.traces import traces_frame
-from doc_review_opt.variants import BASELINE, CONTROLS, VARIANT_ORDER
 from tests.helpers import assert_clean_chart, at, bar_colors
 
 

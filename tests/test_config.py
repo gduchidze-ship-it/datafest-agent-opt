@@ -7,11 +7,11 @@ from typing import Any
 
 import pytest
 
+from doc_review_opt.agent.routing import DEFAULT_POLICY
+from doc_review_opt.agent.variants import CALIBRATED_POLICY, VARIANT_ORDER
 from doc_review_opt.config import get_settings, parse_settings
-from doc_review_opt.decisions import DEFAULT_POLICY
 from doc_review_opt.exceptions import ConfigError
 from doc_review_opt.pricing import BATCH_DISCOUNT, MODEL_PRICES_USD_PER_1M
-from doc_review_opt.variants import CALIBRATED_POLICY, VARIANT_ORDER
 
 
 def raw() -> dict[str, Any]:

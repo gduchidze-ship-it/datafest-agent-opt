@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from nbclient import NotebookClient
 
-from doc_review_opt.diagrams import list_diagrams
+from doc_review_opt.reporting.diagrams import list_diagrams
 from scripts.build_notebook import build
 
 FLAGS = ("RUN_LIVE_API_CALLS", "RUN_LLM_JUDGE", "LANGSMITH_TRACING")

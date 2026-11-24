@@ -11,7 +11,9 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import PercentFormatter
 
-from doc_review_opt.chart_style import (
+from doc_review_opt.agent.variants import BASELINE
+from doc_review_opt.config import get_settings
+from doc_review_opt.reporting.chart_style import (
     CHART,
     PALETTE,
     ROUTE_LABELS,
@@ -27,8 +29,6 @@ from doc_review_opt.chart_style import (
     status_text,
     style_axis,
 )
-from doc_review_opt.config import get_settings
-from doc_review_opt.variants import BASELINE
 
 MONTHLY_PAGES = get_settings().scoring.monthly_pages
 LIVE_RUN = get_settings().live_run

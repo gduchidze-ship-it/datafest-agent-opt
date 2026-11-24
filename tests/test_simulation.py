@@ -6,26 +6,11 @@ import json
 import pandas as pd
 import pytest
 
-from doc_review_opt.config import get_settings
-from doc_review_opt.decisions import DEFAULT_POLICY, Wording
-from doc_review_opt.graph import build_review_graph
-from doc_review_opt.live_api import live_config_for_page
-from doc_review_opt.models import PredicateAnswer, ReviewPage, ScoreAnswer, TokenUsage
-from doc_review_opt.reporting import summarize
-from doc_review_opt.review_agent import EVAL_SET
-from doc_review_opt.simulation import (
-    SimulatedTypedClassifier,
-    _reply_text,
-    decisions_latency_s,
-    jitter,
-    responses_latency_s,
-    simulate_all,
-    simulate_variant,
-    simulated_answers,
-    variant_request_example,
-)
-from doc_review_opt.traces import Trace, traces_frame
-from doc_review_opt.variants import (
+from doc_review_opt.agent.classifiers.decisions import Wording
+from doc_review_opt.agent.classifiers.tool_agent import live_config_for_page
+from doc_review_opt.agent.graph import build_review_graph
+from doc_review_opt.agent.routing import DEFAULT_POLICY
+from doc_review_opt.agent.variants import (
     BASELINE,
     CACHING,
     CONTROLS,
@@ -37,6 +22,22 @@ from doc_review_opt.variants import (
     VARIANT_ORDER,
     VARIANTS,
 )
+from doc_review_opt.config import get_settings
+from doc_review_opt.experiment.simulation import (
+    SimulatedTypedClassifier,
+    _reply_text,
+    decisions_latency_s,
+    jitter,
+    responses_latency_s,
+    simulate_all,
+    simulate_variant,
+    simulated_answers,
+    variant_request_example,
+)
+from doc_review_opt.experiment.traces import Trace, traces_frame
+from doc_review_opt.fixtures import EVAL_SET
+from doc_review_opt.models import PredicateAnswer, ReviewPage, ScoreAnswer, TokenUsage
+from doc_review_opt.reporting.reporting import summarize
 from tests.helpers import at, row
 
 SETTINGS = get_settings()
@@ -81,7 +82,7 @@ async def test_simulation_runs_through_the_real_graph(
         calls.append(args[0])
         return real(*args, **kwargs)  # type: ignore[arg-type]
 
-    monkeypatch.setattr("doc_review_opt.runs.build_review_graph", spy)
+    monkeypatch.setattr("doc_review_opt.experiment.runs.build_review_graph", spy)
     traces = await simulate_variant(CONTROLS)
     assert len(calls) == 1
     assert {t.route_reason for t in traces} >= {"agent_disposition"}

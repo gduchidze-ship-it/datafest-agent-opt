@@ -7,21 +7,49 @@ import json
 from collections.abc import Sequence
 from typing import Any
 
-from doc_review_opt._dispositions import parse_free_text, parse_json_disposition
-from doc_review_opt.cascade import CascadeClassifier, PriorProductionGate
-from doc_review_opt.config import EngineProfile, get_settings
-from doc_review_opt.decisions import (
+from doc_review_opt.agent.classifiers.cascade import (
+    CascadeClassifier,
+    PriorProductionGate,
+)
+from doc_review_opt.agent.classifiers.decisions import (
     QUESTIONS,
-    RoutingPolicy,
     Wording,
     build_decisions_request,
     page_block,
     protocol_block,
     questions,
 )
-from doc_review_opt.graph import Classifier, Redactor
-from doc_review_opt.live_api import CACHE_KEY, agent_request, live_config_for_page
-from doc_review_opt.llm_classifier import classifier_rules, confidence
+from doc_review_opt.agent.classifiers.dispositions import (
+    parse_free_text,
+    parse_json_disposition,
+)
+from doc_review_opt.agent.classifiers.llm_probability import (
+    classifier_rules,
+    confidence,
+)
+from doc_review_opt.agent.classifiers.tool_agent import (
+    agent_request,
+    live_config_for_page,
+)
+from doc_review_opt.agent.prompts import REDACTION_PROMPT, STABLE_REVIEW_PREFIX
+from doc_review_opt.agent.protocols import Classifier, Redactor
+from doc_review_opt.agent.routing import RoutingPolicy
+from doc_review_opt.agent.tools import execute_local_tool
+from doc_review_opt.agent.variants import (
+    ALL_TOOL_NAMES,
+    BASELINE,
+    EXTRA_VARIANTS,
+    ROUTING,
+    VARIANT_ORDER,
+    VARIANTS,
+    VariantSpec,
+    default_policy,
+)
+from doc_review_opt.config import EngineProfile, get_settings
+from doc_review_opt.experiment.live import CACHE_KEY
+from doc_review_opt.experiment.runs import review_pages
+from doc_review_opt.experiment.traces import Trace
+from doc_review_opt.fixtures import CUSTODIANS, EVAL_SET, PROTOCOL, PROTOCOL_SECTIONS
 from doc_review_opt.models import (
     Answer,
     ClassifierResult,
@@ -37,28 +65,6 @@ from doc_review_opt.pricing import (
     DECISIONS_PRICE_KEY,
     approx_tokens,
     estimate_cost_usd,
-)
-from doc_review_opt.review_agent import (
-    CUSTODIANS,
-    EVAL_SET,
-    PROTOCOL,
-    PROTOCOL_SECTIONS,
-    REDACTION_PROMPT,
-    STABLE_REVIEW_PREFIX,
-    execute_local_tool,
-    scrub_pii,
-)
-from doc_review_opt.runs import review_pages
-from doc_review_opt.traces import Trace
-from doc_review_opt.variants import (
-    ALL_TOOL_NAMES,
-    BASELINE,
-    EXTRA_VARIANTS,
-    ROUTING,
-    VARIANT_ORDER,
-    VARIANTS,
-    VariantSpec,
-    default_policy,
 )
 
 SETTINGS = get_settings()
@@ -78,6 +84,13 @@ BASELINE_REPLY = (
     "volume assigned. {ending}"
 )
 UNPARSEABLE_ENDING = "My recommendation is that the team takes a careful look."
+
+
+def scrub_pii(page: ReviewPage) -> str:
+    text = page.text
+    for span in page.labels.pii_spans:
+        text = text.replace(span, "[REDACTED]")
+    return text
 
 
 def jitter(doc_id: str, engine: str, salt: str = "") -> float:

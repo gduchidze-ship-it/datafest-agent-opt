@@ -1,9 +1,9 @@
-"""Synthetic review fixtures, local tools and prompts; no external side effects."""
+"""Synthetic matter, custodians, protocol, prior production and labeled eval pages."""
 
 from __future__ import annotations
 
 import textwrap
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -45,6 +45,7 @@ CUSTODIANS: Mapping[str, Custodian] = {
         ),
     )
 }
+
 
 ATTORNEYS = tuple(c.name for c in CUSTODIANS.values() if c.is_attorney)
 
@@ -144,6 +145,7 @@ PROTOCOL_SECTIONS: Mapping[str, str] = {
     ).strip(),
 }
 
+
 PROTOCOL = "\n\n".join(
     f"{name.upper().replace('_', ' ')}\n{body}"
     for name, body in PROTOCOL_SECTIONS.items()
@@ -196,6 +198,7 @@ def _page(
 
 
 _PRIV_TOOLS = ("lookup_custodian", "escalate_to_attorney")
+
 
 _GIST_PAGES = (
     _page(
@@ -288,6 +291,7 @@ _GIST_PAGES = (
         _labels("produce", 2),
     ),
 )
+
 
 _NEW_PAGES = (
     _page(
@@ -656,6 +660,7 @@ _NEW_PAGES = (
     ),
 )
 
+
 EVAL_SET: tuple[ReviewPage, ...] = tuple(
     sorted(_GIST_PAGES + _NEW_PAGES, key=lambda page: page.doc_id)
 )
@@ -687,6 +692,7 @@ REVIEW_APPENDIX = (
     "metadata. "
 ) * 45
 
+
 PRIOR_PRODUCTION: Mapping[str, Mapping[str, Any]] = {
     "ARC-000572": {
         "matched_doc_id": "ARC-000141",
@@ -701,290 +707,3 @@ PRIOR_PRODUCTION: Mapping[str, Mapping[str, Any]] = {
         "volume": None,
     },
 }
-
-
-def lookup_custodian(name: str, payload: str = "slim") -> dict[str, Any]:
-    custodian = CUSTODIANS.get(name)
-    if custodian is None:
-        return {"found": False, "name": name}
-    if payload == "verbose":
-        return {
-            "found": True,
-            "profile": custodian.__dict__,
-            "directory": {n: c.__dict__ for n, c in CUSTODIANS.items()},
-            "hold_audit_log": REVIEW_APPENDIX,
-        }
-    return {"found": True, "name": name, "is_attorney": custodian.is_attorney}
-
-
-def lookup_protocol(section: str, payload: str = "slim") -> dict[str, Any]:
-    body = PROTOCOL_SECTIONS.get(section)
-    if body is None:
-        return {"found": False, "section": section}
-    if payload == "verbose":
-        return {
-            "found": True,
-            "section": section,
-            "text": body,
-            "appendix": REVIEW_APPENDIX,
-            "all_sections": PROTOCOL_SECTIONS,
-        }
-    return {"found": True, "section": section, "text": body}
-
-
-def check_prior_production(doc_id: str, payload: str = "slim") -> dict[str, Any]:
-    match = PRIOR_PRODUCTION.get(doc_id)
-    if match is None:
-        return {"found": False, "doc_id": doc_id}
-    if payload == "verbose":
-        return {
-            "found": True,
-            "doc_id": doc_id,
-            **match,
-            "index_dump": REVIEW_APPENDIX,
-            "all_matches": PRIOR_PRODUCTION,
-        }
-    return {"found": True, "doc_id": doc_id, **match}
-
-
-def apply_redactions(doc_id: str, spans: list[str]) -> dict[str, Any]:
-    return {"doc_id": doc_id, "status": "applied", "spans_redacted": len(spans)}
-
-
-def escalate_to_attorney(doc_id: str, reason: str) -> dict[str, Any]:
-    return {"doc_id": doc_id, "queue": "attorney_review", "reason": reason}
-
-
-class UnknownToolError(KeyError): ...
-
-
-_TOOL_FUNCTIONS: Mapping[str, Callable[..., dict[str, Any]]] = {
-    "lookup_custodian": lookup_custodian,
-    "lookup_protocol": lookup_protocol,
-    "check_prior_production": check_prior_production,
-    "apply_redactions": apply_redactions,
-    "escalate_to_attorney": escalate_to_attorney,
-}
-_LOOKUP_TOOLS = frozenset(
-    {"lookup_custodian", "lookup_protocol", "check_prior_production"}
-)
-
-
-def execute_local_tool(
-    name: str, args: Mapping[str, Any], payload: str = "slim"
-) -> dict[str, Any]:
-    function = _TOOL_FUNCTIONS.get(name)
-    if function is None:
-        raise UnknownToolError(name)
-    if name in _LOOKUP_TOOLS:
-        return function(**args, payload=payload)
-    return function(**args)
-
-
-def function_schema(
-    name: str, description: str, properties: dict[str, Any], required: list[str]
-) -> dict[str, Any]:
-    return {
-        "type": "function",
-        "name": name,
-        "description": description,
-        "parameters": {
-            "type": "object",
-            "properties": properties,
-            "required": required,
-            "additionalProperties": False,
-        },
-        "strict": True,
-    }
-
-
-VERBOSE_TOOLS: list[dict[str, Any]] = [
-    function_schema(
-        "lookup_custodian",
-        "Retrieve the complete custodian profile, the full directory, hold history, "
-        "audit metadata, and any internal notes that could possibly help decide "
-        "whether a person is an attorney.",
-        {
-            "name": {
-                "type": "string",
-                "description": "The full name of the author, recipient or cc.",
-            }
-        },
-        ["name"],
-    ),
-    function_schema(
-        "lookup_protocol",
-        "Retrieve the complete protocol section, all appendix material, coding "
-        "macros, exception examples, and neighbouring sections.",
-        {
-            "section": {
-                "type": "string",
-                "enum": list(PROTOCOL_SECTIONS),
-                "description": "Protocol section to retrieve.",
-            }
-        },
-        ["section"],
-    ),
-    function_schema(
-        "check_prior_production",
-        "Retrieve the full prior production index entry, similarity diagnostics, "
-        "volume history and every other match, for any page that might be a copy.",
-        {"doc_id": {"type": "string", "description": "The control number."}},
-        ["doc_id"],
-    ),
-    function_schema(
-        "apply_redactions",
-        "Apply redactions in the review platform. Use for any page that might "
-        "contain personal information, even when unsure.",
-        {
-            "doc_id": {"type": "string"},
-            "spans": {"type": "array", "items": {"type": "string"}},
-        },
-        ["doc_id", "spans"],
-    ),
-    function_schema(
-        "escalate_to_attorney",
-        "Escalate a page to an attorney when the page is ambiguous, possibly "
-        "privileged, damaged, or otherwise risky, with a full explanation.",
-        {"doc_id": {"type": "string"}, "reason": {"type": "string"}},
-        ["doc_id", "reason"],
-    ),
-]
-
-SLIM_TOOLS: list[dict[str, Any]] = [
-    function_schema(
-        "lookup_custodian",
-        "Check whether a named person is an attorney.",
-        {"name": {"type": "string"}},
-        ["name"],
-    ),
-    function_schema(
-        "lookup_protocol",
-        "Fetch one protocol section.",
-        {"section": {"type": "string", "enum": list(PROTOCOL_SECTIONS)}},
-        ["section"],
-    ),
-    function_schema(
-        "check_prior_production",
-        "Check whether a page duplicates an earlier production.",
-        {"doc_id": {"type": "string"}},
-        ["doc_id"],
-    ),
-    function_schema(
-        "apply_redactions",
-        "Redact the listed personal-information spans from a page to be produced.",
-        {
-            "doc_id": {"type": "string"},
-            "spans": {"type": "array", "items": {"type": "string"}},
-        },
-        ["doc_id", "spans"],
-    ),
-    function_schema(
-        "escalate_to_attorney",
-        "Send a page to an attorney; give the reason only, never quote the page.",
-        {"doc_id": {"type": "string"}, "reason": {"type": "string"}},
-        ["doc_id", "reason"],
-    ),
-]
-
-
-def allowed_tool_choice(names: list[str]) -> dict[str, Any]:
-    return {
-        "type": "allowed_tools",
-        "mode": "auto",
-        "tools": [{"type": "function", "name": name} for name in names],
-    }
-
-
-REDACTION_PROMPT = (
-    "Return the page text with every piece of personal information replaced by the "
-    "literal token [REDACTED]. Remove the underlying characters; do not mask, "
-    "abbreviate, or summarize them. Preserve all other text exactly.\n\nPAGE:\n"
-)
-
-BAD_BASELINE_PROMPT = textwrap.dedent(
-    """
-    You are a comprehensive e-discovery review super-agent for a litigation team.
-
-    Always be extremely thorough. Before deciding, gather as much context as possible
-    from the protocol, the custodian directory, the prior production index, the
-    redaction system and the escalation queue. Prefer using tools even when the
-    answer may already be apparent. Explain your reasoning in detail so the
-    reviewing attorneys understand every step.
-
-    You are also responsible for drafting the privilege log entry, running QA on your
-    own call, and writing production tags before you give your disposition.
-
-    If there is any uncertainty, call more tools. If the protocol might be relevant,
-    retrieve every section. If a person might be an attorney, look them up. If a page
-    might be a copy, check prior production. If a page might contain personal
-    information, apply redactions.
-    """
-).strip()
-
-CONTROLLED_PROMPT = textwrap.dedent(
-    """
-    Role: First-pass document reviewer on matter 24-CV-118.
-
-    Goal: Give each page exactly one disposition with the fewest necessary tool calls
-    while never producing a privileged page or leaving personal information in
-    produced text.
-
-    Tool rules:
-    - Clearly responsive or clearly unrelated page, no personal data: no tools.
-    - Responsive page with personal data: apply_redactions with the exact spans.
-    - Attorney named in From or To, or relayed legal advice: lookup_custodian if a
-      name is unclear, then escalate_to_attorney with the reason only.
-    - Attorney only in cc on business mail: lookup_custodian, then decide.
-    - Possible copy of an earlier page: check_prior_production.
-    - Damaged or illegible page: escalate_to_attorney.
-
-    Output rules:
-    - Return the disposition JSON only: disposition, redact, reason.
-    - Never quote page text in the reason.
-    """
-).strip()
-
-STABLE_REVIEW_PREFIX = (
-    textwrap.dedent(
-        """
-        Role: First-pass document reviewer on matter 24-CV-118.
-        Constraints: Be concise. One disposition per page: produce, withhold or
-        attorney_review. Never produce a privileged page. Never quote page text.
-        Output shape: disposition, redact, reason.
-        Tool contract: tool definitions are stable across requests; restrict
-        callable tools with tool_choice.allowed_tools.
-        Version: document-review-optimization-v1.
-
-        REVIEW PROTOCOL
-        """
-    ).strip()
-    + "\n"
-    + PROTOCOL
-)
-
-DISPOSITION_FORMAT: dict[str, Any] = {
-    "type": "json_schema",
-    "name": "review_disposition",
-    "strict": True,
-    "schema": {
-        "type": "object",
-        "properties": {
-            "disposition": {
-                "type": "string",
-                "enum": ["produce", "withhold", "attorney_review"],
-            },
-            "redact": {"type": "boolean"},
-            "reason": {"type": "string"},
-        },
-        "required": ["disposition", "redact", "reason"],
-        "additionalProperties": False,
-    },
-}
-
-
-def scrub_pii(page: ReviewPage) -> str:
-    text = page.text
-    for span in page.labels.pii_spans:
-        text = text.replace(span, "[REDACTED]")
-    return text

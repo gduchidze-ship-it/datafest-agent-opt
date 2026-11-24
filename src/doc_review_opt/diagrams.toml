@@ -282,3 +282,39 @@ edges = [
   { from = "tools", to = "llm", label = "yes" },
   { from = "typed", to = "llm", label = "no" },
 ]
+
+[graph]
+title = "The review graph, drawn from the compiled LangGraph"
+group = "review_page: one subgraph per page, fanned out with Send"
+
+[graph.nodes.__start__]
+label = "START\nbatch of pages"
+kind = "note"
+
+[graph.nodes."review_page:classify"]
+label = "classify\nengine + code router"
+kind = "step"
+
+[graph.nodes."review_page:attorney_review"]
+label = "attorney_review\ninterrupt()"
+kind = "attorney"
+
+[graph.nodes."review_page:redact"]
+label = "redact"
+kind = "redact"
+
+[graph.nodes."review_page:produce"]
+label = "produce"
+kind = "produce"
+
+[graph.nodes."review_page:withhold"]
+label = "withhold"
+kind = "withhold"
+
+[graph.nodes."review_page:__end__"]
+label = "page done"
+kind = "note"
+
+[graph.nodes.__end__]
+label = "END\nall results"
+kind = "note"
