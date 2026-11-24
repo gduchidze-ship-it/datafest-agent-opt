@@ -7,6 +7,7 @@ import json
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from itertools import zip_longest
 from typing import Any, Literal
 
 from langsmith import traceable
@@ -69,6 +70,16 @@ LIVE_PAGE_LIMIT = LIVE.page_limit
 
 
 CACHE_KEY = f"matter-{MATTER}"
+
+
+def pick_live_pages(
+    pages: Sequence[ReviewPage], limit: int = LIVE_PAGE_LIMIT
+) -> list[ReviewPage]:
+    by_route: dict[str, list[ReviewPage]] = {}
+    for page in pages:
+        by_route.setdefault(page.labels.expected_route, []).append(page)
+    turns = zip_longest(*by_route.values())
+    return [page for turn in turns for page in turn if page is not None][:limit]
 
 
 JUDGE_MODEL = MODELS.judge
@@ -344,6 +355,7 @@ __all__ = [
     "JudgeGrade",
     "build_live_engines",
     "judge_page",
+    "pick_live_pages",
     "run_live_variant",
     "run_traced",
 ]

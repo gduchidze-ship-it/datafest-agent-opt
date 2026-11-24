@@ -244,11 +244,11 @@ groups = [
 ]
 
 [diagrams.eval_pipeline]
-title = "The eval pipeline: one variant, 30 pages, one verdict"
+title = "The eval pipeline: one variant, every page, one verdict"
 cols = 3
 rows = 2
 nodes = [
-  { id = "evalset", label = "Eval set\n30 labelled pages", col = 0, row = 0, kind = "step" },
+  { id = "evalset", label = "Eval set\nlabelled pages", col = 0, row = 0, kind = "step" },
   { id = "run", label = "Run one variant\nthrough the same graph", col = 1, row = 0, kind = "step" },
   { id = "traces", label = "One trace\nper page", col = 2, row = 0, kind = "step" },
   { id = "graders", label = "Graders\nguardrails and metrics", col = 2, row = 1, kind = "step" },

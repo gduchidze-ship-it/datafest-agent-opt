@@ -31,6 +31,7 @@ from doc_review_opt.reporting.reporting import plot_quality_gate, summarize
 from doc_review_opt.reporting.walkthrough import (
     before_after,
     confusion_table,
+    follow_page,
     gate,
     gate_table,
     holdout_table,
@@ -40,6 +41,7 @@ from doc_review_opt.reporting.walkthrough import (
     symptoms,
     watch_percent,
 )
+from tests.test_metrics import TRACES
 
 FLOOR = get_settings().quality.guardrail_pass_floor
 LOW_PAGE = next(
@@ -99,14 +101,14 @@ def test_original_wording_is_rejected_on_the_floor_alone(
     assert not result.accepted
     assert result.privileged_leaks == 0
     assert result.pii_leaks == 0
-    assert result.pass_rate == pytest.approx(28 / 30)
+    assert result.pass_rate == pytest.approx(56 / 60)
     assert result.pass_rate < FLOOR
 
 
 def test_routing_is_accepted_with_one_missed_escalation(traces: list[Trace]) -> None:
     result = gate(traces, ROUTING)
     assert result.accepted
-    assert result.pass_rate == pytest.approx(29 / 30)
+    assert result.pass_rate == pytest.approx(59 / 60)
     assert result.failures == {"escalation_mismatch": 1}
 
 
@@ -121,10 +123,10 @@ def test_symptoms_show_the_published_baseline_numbers(summary: pd.DataFrame) -> 
     text = symptoms(summary, BASELINE)
     for fragment in (
         "5.0 per page (4.2 unneeded)",
-        "8,287",
+        "8,474",
         "3.59s",
-        "$0.00879",
-        "50%",
+        "$0.00895",
+        "47%",
         "privileged 0, PII 2",
     ):
         assert fragment in text
@@ -156,8 +158,8 @@ def test_before_after_has_one_formatted_row_per_metric(summary: pd.DataFrame) ->
     assert before["privileged leaks"] == "0"
     assert before["PII leaks"] == "2"
     assert after["PII leaks"] == "0"
-    assert before["model $/page"] == "$0.00879"
-    assert after["model $/page"] == "$0.00131"
+    assert before["model $/page"] == "$0.00895"
+    assert after["model $/page"] == "$0.00136"
     assert after["model $/page"].startswith("$0.")
     assert after["escalation rate"].endswith("%")
 
@@ -217,7 +219,7 @@ def test_metrics_table_hard_gate_rows_match_the_gate(traces: list[Trace]) -> Non
     assert pii[VARIANT_LABELS[BASELINE]] == "2"
     assert pii[VARIANT_LABELS[CONTROLS]] == "0"
     passed = cells(table, "guardrail pass rate (floor 95%)")
-    assert passed[VARIANT_LABELS[ROUTING]] == "97%"
+    assert passed[VARIANT_LABELS[ROUTING]] == "98%"
 
 
 def test_metrics_table_marks_watch_cells_only_where_a_floor_is_missed(
@@ -225,12 +227,14 @@ def test_metrics_table_marks_watch_cells_only_where_a_floor_is_missed(
 ) -> None:
     table = metrics_table(traces, VARIANT_ORDER)
     under = cells(table, "under-escalation rate")
-    assert under[VARIANT_LABELS[ROUTING]].endswith("(watch)")
+    assert under[VARIANT_LABELS[ROUTING]] == "5%"
     assert not under[VARIANT_LABELS[DECISION_MODEL]].endswith("(watch)")
     pii = cells(table, "PII recall")
-    assert pii[VARIANT_LABELS[BASELINE]] == "86% (watch)"
+    assert pii[VARIANT_LABELS[BASELINE]] == "93% (watch)"
     assert pii[VARIANT_LABELS[CONTROLS]] == "100%"
-    assert cells(table, "relevance recall")[VARIANT_LABELS[ROUTING]] == "94% (watch)"
+    assert cells(table, "relevance recall")[VARIANT_LABELS[ROUTING]] == "97%"
+    accuracy = cells(table, "route accuracy")
+    assert accuracy[VARIANT_LABELS[BASELINE]] == "83% (watch)"
 
 
 def test_metrics_table_shows_tail_latency_and_cost_with_attorney_time(
@@ -239,7 +243,7 @@ def test_metrics_table_shows_tail_latency_and_cost_with_attorney_time(
     table = metrics_table(traces, [BASELINE])
     assert cells(table, "p95 latency (s)")[VARIANT_LABELS[BASELINE]] == "4.10"
     assert cells(table, "$/page with attorney time")[VARIANT_LABELS[BASELINE]] == (
-        "$0.759"
+        "$0.709"
     )
 
 
@@ -252,17 +256,17 @@ def test_confusion_table_is_expected_by_actual_for_the_decision_model(
     assert table.index.name == "expected"
     assert table.columns.name == "actual"
     assert table.to_numpy().tolist() == [
-        [9, 0, 0, 0],
-        [0, 6, 0, 0],
-        [0, 0, 5, 0],
-        [0, 0, 0, 10],
+        [18, 0, 0, 0],
+        [0, 12, 0, 0],
+        [0, 0, 10, 0],
+        [0, 0, 0, 20],
     ]
 
 
 def test_confusion_table_shows_the_baseline_errors(traces: list[Trace]) -> None:
     table = confusion_table(traces, BASELINE)
     assert int(table.to_numpy().sum()) == len(EVAL_SET)
-    assert int(table.to_numpy().trace()) == round(0.767 * len(EVAL_SET))
+    assert int(table.to_numpy().trace()) == 50
 
 
 def test_holdout_table_has_one_row_per_policy_and_half() -> None:
@@ -294,3 +298,107 @@ def test_flagged_ceiling_cells_never_round_down_to_the_ceiling() -> None:
     assert watch_percent(0.052, 0.05, below=False) == "6%"
     assert watch_percent(0.25, 0.20, below=False) == "25%"
     assert watch_percent(0.1, 0.05, below=False) == "10%"
+
+
+def hand_traces() -> list[Trace]:
+    first = [t for t in TRACES if t.doc_id == "P4"]
+    second = [
+        t.model_copy(
+            update={
+                "variant": "w",
+                "variant_label": "Round W",
+                "engine": "decisions",
+                "models_used": ("gpt-6-luna", "gpt-6.1-terra"),
+                "tool_calls": 0,
+                "sync_tokens": 2400,
+                "latency_s": 0.5,
+                "model_cost_usd": 0.00042,
+                "route_reason": "privilege_above_threshold",
+                "attorney_decision": "withhold",
+            }
+        )
+        for t in first
+    ]
+    first = [
+        t.model_copy(
+            update={
+                "variant_label": "Round V",
+                "tool_calls": 5,
+                "tools": ("a", "b", "c", "d", "e"),
+                "sync_tokens": 8200,
+                "latency_s": 3.456,
+                "model_cost_usd": 0.0123,
+                "route_reason": "agent_disposition",
+            }
+        )
+        for t in first
+    ]
+    return [*first, *second]
+
+
+def test_follow_page_has_one_plain_row_per_round() -> None:
+    table = follow_page(hand_traces(), "P4", ["v", "w"])
+    assert list(table.columns) == [
+        "round",
+        "engine and model",
+        "tools called",
+        "tokens",
+        "seconds",
+        "model cost",
+        "outcome",
+        "reason",
+    ]
+    assert table["round"].tolist() == ["Round V", "Round W"]
+    assert table["tools called"].tolist() == [5, 0]
+    assert table["tokens"].tolist() == ["8,200", "2,400"]
+    assert table["seconds"].tolist() == ["3.46", "0.50"]
+    assert table["model cost"].tolist() == ["$0.01230", "$0.00042"]
+    assert table["engine and model"].tolist() == [
+        "stub: stub",
+        "decisions: gpt-6-luna, gpt-6.1-terra",
+    ]
+    assert table["reason"].tolist() == [
+        "agent disposition",
+        "privilege above threshold",
+    ]
+
+
+def test_follow_page_names_the_attorney_outcome() -> None:
+    table = follow_page(hand_traces(), "P4", ["v", "w"])
+    assert table["outcome"].tolist() == [
+        "attorney review",
+        "attorney review, then withhold",
+    ]
+
+
+def test_follow_page_follows_the_requested_round_order() -> None:
+    table = follow_page(hand_traces(), "P4", ["w", "v"])
+    assert table["round"].tolist() == ["Round W", "Round V"]
+
+
+def test_follow_page_rejects_a_page_missing_from_a_round() -> None:
+    with pytest.raises(ValueError, match="no trace"):
+        follow_page(hand_traces(), "P1", ["v", "w"])
+
+
+def test_follow_page_on_the_real_traces_covers_every_round(
+    traces: list[Trace],
+) -> None:
+    page = next(p for p in EVAL_SET if p.labels.privileged)
+    table = follow_page(traces, page.doc_id)
+    assert table["round"].tolist() == [VARIANT_LABELS[v] for v in VARIANT_ORDER]
+    assert set(table["outcome"]) <= {
+        "attorney review",
+        "attorney review, then withhold",
+    }
+    assert table["tools called"].iloc[0] == 5
+
+
+def test_follow_page_lists_a_repeated_model_once() -> None:
+    twice = [
+        t.model_copy(update={"models_used": ("gpt-6-luna", "gpt-6-luna")})
+        for t in hand_traces()
+        if t.variant == "v"
+    ]
+    table = follow_page(twice, "P4", ["v"])
+    assert table["engine and model"].tolist() == ["stub: gpt-6-luna"]

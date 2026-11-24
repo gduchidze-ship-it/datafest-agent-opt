@@ -3,7 +3,10 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
+from doc_review_opt.fixtures import EVAL_SET
 from scripts.cells import Cell, code, md
+
+PAGES = len(EVAL_SET)
 
 
 def _live_loop() -> list[Cell]:
@@ -103,8 +106,8 @@ print(BAD_BASELINE_PROMPT)
 print("--- controlled prompt ---")
 print(CONTROLLED_PROMPT)
 """),
-        md("""
-**Re-measure.** Same 30 pages, before and after.
+        md(f"""
+**Re-measure.** Same {PAGES} pages, before and after.
 """),
         code("""
 compare_rounds(BASELINE, CONTROLS)
@@ -311,7 +314,7 @@ print("\\n".join(difflib.unified_diff(
 
 **Simulation assumption.** The dry-run privileged probability for cc'd mail under the protocol wording is a `config.toml` value, not a measurement.
 
-**The live run refuted it (2026-11-18).** The real API scored ARC-000306 at 0.02 (original wording) and 0.00 (protocol wording), and ARC-000413 at 0.00 with both. The simulated over-escalation of about 0.3 did not reproduce, so `03b` is a simulation-only illustration. The protocol wording stays because it is free and matches the protocol.
+**A separate live probe refuted it (2026-11-18).** The real API scored ARC-000306 at 0.02 (original wording) and 0.00 (protocol wording), and ARC-000413 at 0.00 with both. The simulated over-escalation of about 0.3 did not reproduce, so `03b` is a simulation-only illustration. The protocol wording stays because it is free and matches the protocol.
 """),
         code("""
 import pandas as pd

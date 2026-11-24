@@ -19,7 +19,7 @@ LABELS = [(page.doc_id, page.labels) for page in EVAL_SET]
 
 def test_doc_ids_are_unique() -> None:
     ids = [page.doc_id for page in EVAL_SET]
-    assert len(ids) == len(set(ids)) == 30
+    assert len(ids) == len(set(ids)) == 60
 
 
 def test_splits_are_disjoint_and_cover_the_set() -> None:

@@ -3,7 +3,10 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
+from doc_review_opt.fixtures import EVAL_SET
 from scripts.cells import Cell, code, md
+
+PAGES = len(EVAL_SET)
 
 
 def _walkthroughs() -> list[Cell]:
@@ -64,10 +67,10 @@ walkthrough(trap_page, "Privileged trap page")
         code("""
 walkthrough(borderline_page, "Borderline page")
 """),
-        md("""
+        md(f"""
 ## Before and after summary
 
-The baseline against the final workflow (Round 5), same 30 pages.
+The baseline against the final workflow (Round 5), same {PAGES} pages.
 """),
         code("""
 base = SUMMARY_BY_VARIANT.loc[BASELINE]

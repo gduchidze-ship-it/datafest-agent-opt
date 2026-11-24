@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, NamedTuple
 
-Cell = tuple[Literal["markdown", "code"], str]
+
+class Cell(NamedTuple):
+    kind: Literal["markdown", "code"]
+    source: str
+    hidden: bool = False
 
 
 def md(text: str) -> Cell:
-    return ("markdown", text.strip("\n"))
+    return Cell("markdown", text.strip("\n"))
 
 
-def code(text: str) -> Cell:
-    return ("code", text.strip("\n"))
+def code(text: str, *, hidden: bool = False) -> Cell:
+    return Cell("code", text.strip("\n"), hidden)

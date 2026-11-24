@@ -462,7 +462,7 @@ def plot_route_mix(frame: pd.DataFrame, variants: Sequence[str]) -> Figure:
     axis.invert_yaxis()
     axis.set_xlim(0, 1)
     axis.xaxis.set_major_formatter(PercentFormatter(1.0))
-    style_axis(axis, xlabel="share of the 30 pages", grid_axis="x")
+    style_axis(axis, xlabel=f"share of the {len(first)} pages", grid_axis="x")
     add_legend_above(axis, len(routes))
     return fig
 

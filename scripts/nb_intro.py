@@ -3,7 +3,10 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
+from doc_review_opt.fixtures import EVAL_SET
 from scripts.cells import Cell, code, md
+
+PAGES = len(EVAL_SET)
 
 
 def _opening() -> list[Cell]:
@@ -126,7 +129,7 @@ print("RUN_LLM_JUDGE =", RUN_LLM_JUDGE)
 print("LANGSMITH_TRACING =", LANGSMITH_TRACING)
 print(f"Live budget hard stop: ${budget.limit_usd:.2f}; live page limit: {LIVE_PAGE_LIMIT}")
 """),
-        md("""
+        md(f"""
 ## Success criteria
 
 Accept savings only if quality holds. The gates, in order:
@@ -136,7 +139,7 @@ Accept savings only if quality holds. The gates, in order:
 3. **Escalation accuracy:** attorney review only where needed.
 4. **Cost and latency:** compared only after the gates pass. Cost includes attorney time.
 
-The eval set has 30 pages, split into a calibration half and a holdout half. Thresholds are tuned on the calibration half only.
+The eval set has {PAGES} pages, split into a calibration half and a holdout half. Thresholds are tuned on the calibration half only.
 """),
         md("""
 ## Simulation contract
@@ -166,10 +169,10 @@ The optional live cells produce the same trace schema from real API calls.
 
 Reasoning is off everywhere, so it is not a row here.
 """),
-        md("""
+        md(f"""
 ## Sample evaluation set
 
-30 synthetic pages: the six original pages plus borderline responsiveness, attorney-cc'd business mail, several personal-data kinds, OCR noise and near-duplicates. Each page is labelled for responsiveness (0 to 2), privilege, personal data, expected route, escalation, difficulty and risk.
+{PAGES} synthetic pages: the six original pages plus borderline responsiveness, attorney-cc'd business mail, several personal-data kinds, OCR noise and near-duplicates. Each page is labelled for responsiveness (0 to 2), privilege, personal data, expected route, escalation, difficulty and risk.
 """),
         code("""
 from doc_review_opt.fixtures import CALIBRATION, EVAL_SET, HOLDOUT, MATTER
@@ -272,10 +275,10 @@ display(pd.DataFrame(MODEL_PRICES_USD_PER_1M).T.rename_axis("model"))
 print(f"Batch multiplier: {BATCH_DISCOUNT} (50% off)")
 print(f"Attorney review assumption: ${get_settings().attorney.review_cost_usd_per_page:.2f} per escalated page")
 """),
-        md("""
+        md(f"""
 ## Dry-run simulation
 
-The [simulation](../src/doc_review_opt/experiment/simulation.py) runs each variant on the same 30 pages through the review graph with simulated engines, so routing can really err. Cost is model cost plus attorney time per escalated page.
+The [simulation](../src/doc_review_opt/experiment/simulation.py) runs each variant on the same {PAGES} pages through the review graph with simulated engines, so routing can really err. Cost is model cost plus attorney time per escalated page.
 
 - Decision-model rounds use thresholds calibrated on the calibration half.
 - Caching assumes a warm cache and the 1,024-token minimum; it is not measured.

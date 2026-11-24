@@ -661,8 +661,499 @@ _NEW_PAGES = (
 )
 
 
+_SHIPMENT_SCHEDULE = "\n".join(
+    f"Line {n:02d}: shipment SHP-{4100 + 7 * n} departed {1 + n % 3} Oct, "
+    f"invoice INV-{9200 + 11 * n}, amount ${(n * 37 + 120) * 1000:,}, "
+    f"recognized in Q3 pending the cutoff test."
+    for n in range(1, 39)
+)
+
+
+_LADING_SCHEDULE = "\n".join(
+    f"Item {n:02d}: bill of lading BOL-{7300 + 13 * n} for customer lot "
+    f"LOT-{510 + 17 * n}, value ${(n * 53 + 90) * 1000:,}, delivery confirmed "
+    f"{30 - n % 5} Sep, cutoff test result: {'exception' if n % 4 == 0 else 'clear'}."
+    for n in range(1, 35)
+)
+
+
+_EXTRA_PAGES = (
+    _page(
+        "ARC-000604",
+        "Yusuf Demir",
+        "Yusuf Demir",
+        "ARCADIA FREIGHT -- EMAIL\n"
+        "From: Yusuf Demir\n"
+        "To: Dana Whitfield\n"
+        "Subject: Q3 deferred revenue roll-forward\n"
+        "Dana -- the deferred revenue roll-forward for Q3 is attached. The $3.1M "
+        "of 1 Oct shipments sits in deferred revenue after the cutoff entry. "
+        "Supporting schedule is WP-Q3-CUTOFF-14.",
+        _labels("produce", 2),
+        to=("Dana Whitfield",),
+    ),
+    _page(
+        "ARC-000607",
+        "Dana Whitfield",
+        "Dana Whitfield",
+        "ARCADIA FREIGHT -- Q3 REVENUE RECONCILIATION\n"
+        "Sub-ledger recognized revenue of $48.2M agrees to the general ledger. "
+        "Reconciling item: $3.1M of shipments dated 1 Oct, reversed from Q3 by "
+        "journal entry JE-2024-0931. Prepared by Dana Whitfield, Controller.",
+        _labels("produce", 2),
+    ),
+    _page(
+        "ARC-000611",
+        "Raj Venkatesan",
+        "Raj Venkatesan",
+        "ARCADIA FREIGHT -- TREASURY NOTE\n"
+        "Cash collected in October on the $3.1M of Q3-recognized shipments totals "
+        "$2.2M so far. If the cutoff is restated, the receivable moves with the "
+        "revenue to Q4. Aging report is WP-Q3-AR-07.",
+        _labels("produce", 2),
+    ),
+    _page(
+        "ARC-000615",
+        "Dana Whitfield",
+        "Marcus Oyelaran",
+        "ARCADIA FREIGHT -- EMAIL\n"
+        "From: Marcus Oyelaran\n"
+        "To: Dana Whitfield\n"
+        "Cc: Tomas Brandt\n"
+        "Subject: Q3 cutoff schedule for the close pack\n"
+        "Dana -- final cutoff schedule attached: $3.1M of 1 Oct shipments, Q3 "
+        "recognized revenue $48.2M. Tomas is copied because he is on the standing "
+        "close distribution list; there is nothing here for Legal to answer.",
+        _labels(
+            "produce",
+            2,
+            difficulty="trap",
+            risk="medium",
+            tools=("lookup_custodian",),
+        ),
+        to=("Dana Whitfield",),
+        cc=("Tomas Brandt",),
+    ),
+    _page(
+        "ARC-000618",
+        "Raj Venkatesan",
+        "Yusuf Demir",
+        "ARCADIA FREIGHT -- EMAIL\n"
+        "From: Yusuf Demir\n"
+        "To: Raj Venkatesan\n"
+        "Cc: Helen Park\n"
+        "Updated shipment timing list for the $3.1M cutoff item, as requested for "
+        "the auditors' sample. Q3 recognized revenue is $48.2M. Outside counsel "
+        "is copied on every auditor mailing; no advice is being asked for.",
+        _labels(
+            "produce",
+            2,
+            difficulty="trap",
+            risk="medium",
+            tools=("lookup_custodian",),
+        ),
+        to=("Raj Venkatesan",),
+        cc=("Helen Park",),
+    ),
+    _page(
+        "ARC-000622",
+        "Dana Whitfield",
+        "Yusuf Demir",
+        "ARCADIA FREIGHT -- PRIVILEGED & CONFIDENTIAL STAMP (CLOSE SCHEDULE)\n"
+        "From: Yusuf Demir\n"
+        "To: Dana Whitfield\n"
+        "Q3 cutoff test results: 14 of 212 bills of lading dated 30 Sep to 3 Oct "
+        "fail the test, totaling $3.1M. The header above is the department's "
+        "default stamp; no lawyer has seen or commented on this schedule.",
+        _labels(
+            "produce",
+            2,
+            difficulty="trap",
+            risk="medium",
+            tools=("lookup_custodian",),
+        ),
+        to=("Dana Whitfield",),
+    ),
+    _page(
+        "ARC-000626",
+        "Lena Ortiz",
+        "Lena Ortiz",
+        "ARCADIA FREIGHT -- EMAIL THREAD\n"
+        "From: Lena Ortiz\n"
+        "To: Nadia Brooks\n"
+        "Subject: Committee packet and room booking\n"
+        "Packet items: (1) the Q3 revenue cutoff memo quantifying the $3.1M "
+        "timing item, (2) the restatement options table. Also, the boardroom is "
+        "booked 14 November and lunch will be sandwiches.",
+        _labels("produce", 2, difficulty="routine"),
+        to=("Nadia Brooks",),
+    ),
+    _page(
+        "ARC-000630",
+        "Yusuf Demir",
+        "Yusuf Demir",
+        "ARCADIA FREIGHT -- Q3 CUTOFF TEST WORKPAPER WP-Q3-CUTOFF-15\n"
+        "Population: bills of lading dated 30 Sep to 3 Oct. Recognized revenue "
+        "under review: $48.2M. Exceptions total $3.1M.\n" + _SHIPMENT_SCHEDULE,
+        _labels("produce", 2, difficulty="routine"),
+    ),
+    _page(
+        "ARC-000633",
+        "Lena Ortiz",
+        "Lena Ortiz",
+        "ARCADIA FREIGHT -- BOARD MINUTES (EXCERPT)\n"
+        "The Board received the CFO's update on the Q3 revenue cutoff convention "
+        "and the $3.1M timing item. The Board asked for the auditors' written "
+        "view before any restatement decision. No vote was taken.",
+        _labels("produce", 2),
+    ),
+    _page(
+        "ARC-000637",
+        "Ines Calloway",
+        "Ines Calloway",
+        "ARCADIA FREIGHT -- CAFETERIA NOTICE\n"
+        "The cafeteria will close at 14:00 on Friday for deep cleaning. Hot meals "
+        "resume Monday. Please return trays to the rack by the east door.",
+        _labels("withhold", 0),
+    ),
+    _page(
+        "ARC-000640",
+        "Ines Calloway",
+        "Ines Calloway",
+        "ARCADIA FREIGHT -- PARKING NOTICE\n"
+        "Level 2 of the staff garage is closed for line painting from Monday to "
+        "Wednesday. Use Level 3 or the overflow lot behind Dock 1.",
+        _labels("withhold", 0),
+    ),
+    _page(
+        "ARC-000643",
+        "Owen Fitch",
+        "Owen Fitch",
+        "ARCADIA FREIGHT -- WAGE GARNISHMENT ORDER (HR FILE)\n"
+        "Employee: Pedro Alvarez, SSN 900-62-3841, home phone 555-0192. Garnish "
+        "$220 per pay period starting 1 November, remit to the county clerk.",
+        _labels(
+            "withhold",
+            0,
+            difficulty="routine",
+            risk="medium",
+            pii=("900-62-3841", "555-0192"),
+        ),
+    ),
+    _page(
+        "ARC-000646",
+        "Grace Lindqvist",
+        "Grace Lindqvist",
+        "ARCADIA FREIGHT -- LEAVE REQUEST FORM\n"
+        "Employee: Wendell Okafor, date of birth 1988-02-17. Reason: outpatient "
+        "treatment for a chronic condition, 3 days. Contact: 555-0121. Approved "
+        "by the HR Business Partner.",
+        _labels(
+            "withhold",
+            0,
+            difficulty="routine",
+            risk="medium",
+            pii=(
+                "1988-02-17",
+                "outpatient treatment for a chronic condition",
+                "555-0121",
+            ),
+        ),
+    ),
+    _page(
+        "ARC-000649",
+        "Lena Ortiz",
+        "Lena Ortiz",
+        "ARCADIA FREIGHT -- AUDIT COMMITTEE MINUTES (EXCERPT) -- RESENT COPY\n"
+        "The Committee discussed the Q3 revenue cutoff convention and asked "
+        "management to prepare a memo quantifying the effect of recognizing the "
+        "$3.1M in Q4 instead. No decision was taken. Next review: 14 November.",
+        _labels(
+            "withhold",
+            2,
+            difficulty="trap",
+            tools=("check_prior_production",),
+        ),
+    ),
+    _page(
+        "ARC-000652",
+        "Dana Whitfield",
+        "Dana Whitfield",
+        "ARCADIA FREIGHT -- EXPENSE REPORT\n"
+        "Employee: Dana Whitfield, Controller. Team lunch for the finance group "
+        "after the audit walkthrough: $186.40. Parking: $22.00. No client "
+        "entertainment. Approved by Nadia Brooks.",
+        _labels("withhold", 0, difficulty="trap"),
+    ),
+    _page(
+        "ARC-000656",
+        "Yusuf Demir",
+        "Yusuf Demir",
+        "ARCADIA FREIGHT -- EMAIL\n"
+        "From: Yusuf Demir\n"
+        "To: Dana Whitfield\n"
+        "Cutoff test is done: $3.1M of 1 Oct shipments confirmed, recognized "
+        "revenue $48.2M, schedule WP-Q3-CUTOFF-16. I am out Friday; text my "
+        "personal mobile, 555-0134, if the auditors call about timing.",
+        _labels(
+            "redact",
+            2,
+            difficulty="routine",
+            risk="medium",
+            pii=("555-0134",),
+            tools=("apply_redactions",),
+        ),
+        to=("Dana Whitfield",),
+    ),
+    _page(
+        "ARC-000659",
+        "Yusuf Demir",
+        "Noor Haddad",
+        "ARCADIA FREIGHT -- SALES OPS EMAIL\n"
+        "Second affected customer lot: Harbor Tile, $0.9M, departed 1 Oct. "
+        "Delivery contact is Marisol Vega, 555-0187, "
+        "marisol.vega@harbor-tile.example, who confirmed receipt on 2 Oct.",
+        _labels(
+            "redact",
+            2,
+            risk="medium",
+            pii=("555-0187", "marisol.vega@harbor-tile.example"),
+            tools=("apply_redactions",),
+        ),
+    ),
+    _page(
+        "ARC-000662",
+        "Owen Fitch",
+        "Owen Fitch",
+        "ARCADIA FREIGHT -- PAYROLL ACCRUAL NOTE\n"
+        "The Q3 sales bonus pool depends on recognized Q3 revenue; the $3.1M "
+        "cutoff item decides the threshold. Pay the regional lead's accrual of "
+        "$8,400 to payroll account 7710-336-02 only after the cutoff is settled.",
+        _labels(
+            "redact",
+            2,
+            risk="medium",
+            pii=("7710-336-02",),
+            tools=("apply_redactions",),
+        ),
+    ),
+    _page(
+        "ARC-000665",
+        "Yusuf Demir",
+        "Yusuf Demir",
+        "ARCADIA FREIGHT -- Q3 CUTOFF WORKPAPER WP-Q3-CUTOFF-17\n"
+        "Population: bills of lading dated 30 Sep to 3 Oct. Exceptions total "
+        "$3.1M of $48.2M recognized revenue.\n" + _LADING_SCHEDULE + "\n"
+        "Reviewer note: customer refund contact is Elena Marsh, 555-0155, "
+        "elena.marsh@lakeside-mills.example.",
+        _labels(
+            "redact",
+            2,
+            difficulty="borderline",
+            risk="medium",
+            pii=("555-0155", "elena.marsh@lakeside-mills.example"),
+            tools=("apply_redactions",),
+        ),
+    ),
+    _page(
+        "ARC-000668",
+        "Marcus Oyelaran",
+        "Marcus Oyelaran",
+        "ARCADIA FREIGHT -- EMAIL THREAD\n"
+        "From: Marcus Oyelaran\n"
+        "To: Nadia Brooks\n"
+        "Re: Q3 cutoff timing and Raj's absence\n"
+        "Treasury will model the $3.1M shift to Q4 while Raj is out (surgery, "
+        "employee ID 55210, back after 4 November). The Q3 recognized revenue "
+        "figure of $48.2M does not change until the committee decides.",
+        _labels(
+            "redact",
+            2,
+            difficulty="routine",
+            risk="medium",
+            pii=("surgery", "55210"),
+            tools=("apply_redactions",),
+        ),
+        to=("Nadia Brooks",),
+    ),
+    _page(
+        "ARC-000672",
+        "Nadia Brooks",
+        "Tomas Brandt",
+        "ARCADIA FREIGHT -- ATTORNEY-CLIENT PRIVILEGED LEGAL ADVICE\n"
+        "From: Tomas Brandt, General Counsel\n"
+        "To: Nadia Brooks, CFO\n"
+        "Nadia -- legal advice on the Q3 cutoff: do not describe the $3.1M item "
+        "as an error in the committee packet. If asked, say the convention was "
+        "under review. We should talk before the vote.",
+        _labels("attorney_review", 2, risk="high", privileged=True, tools=_PRIV_TOOLS),
+        to=("Nadia Brooks",),
+    ),
+    _page(
+        "ARC-000675",
+        "Priya Raghunathan",
+        "Helen Park",
+        "ARCADIA FREIGHT -- PRIVILEGED ATTORNEY WORK PRODUCT\n"
+        "From: Helen Park, Kessler & Moore LLP\n"
+        "To: Priya Raghunathan, Associate General Counsel\n"
+        "Our litigation plan on the cutoff claims: move to dismiss the intent "
+        "theory, and prepare the Controller for deposition on the Q3 revenue "
+        "recognition timeline.",
+        _labels("attorney_review", 2, risk="high", privileged=True, tools=_PRIV_TOOLS),
+        to=("Priya Raghunathan",),
+    ),
+    _page(
+        "ARC-000678",
+        "Raj Venkatesan",
+        "Raj Venkatesan",
+        "ARCADIA FREIGHT -- EMAIL\n"
+        "From: Raj Venkatesan\n"
+        "To: Tomas Brandt\n"
+        "Tomas -- may we tell the lender about the $3.1M cutoff adjustment before "
+        "the auditors conclude? I need your legal view on the covenant notice "
+        "wording before Monday.",
+        _labels("attorney_review", 2, risk="high", privileged=True, tools=_PRIV_TOOLS),
+        to=("Tomas Brandt",),
+    ),
+    _page(
+        "ARC-000681",
+        "Dana Whitfield",
+        "Dana Whitfield",
+        "ARCADIA FREIGHT -- EMAIL\n"
+        "From: Dana Whitfield\n"
+        "To: Yusuf Demir, Raj Venkatesan\n"
+        "Passing on what Priya told me after the committee call: she thinks we "
+        "should book the $3.1M in Q4 and keep the memo short. Please draft the "
+        "journal entry that way and do not attach her name.",
+        _labels(
+            "attorney_review",
+            2,
+            difficulty="borderline",
+            risk="high",
+            privileged=True,
+            tools=("escalate_to_attorney",),
+        ),
+        to=("Yusuf Demir", "Raj Venkatesan"),
+    ),
+    _page(
+        "ARC-000684",
+        "Nadia Brooks",
+        "Nadia Brooks",
+        "ARCADIA FREIGHT -- EMAIL\n"
+        "From: Nadia Brooks\n"
+        "To: Lena Ortiz\n"
+        "Our lawyers have looked at the cutoff problem and their view is that "
+        "restating Q3 would hurt us in the lawsuit more than waiting. Keep that "
+        "reasoning out of the committee minutes.",
+        _labels(
+            "attorney_review",
+            2,
+            difficulty="borderline",
+            risk="high",
+            privileged=True,
+            tools=("escalate_to_attorney",),
+        ),
+        to=("Lena Ortiz",),
+    ),
+    _page(
+        "ARC-000687",
+        "Lena Ortiz",
+        "Tomas Brandt",
+        "ARCADIA FREIGHT -- FW: PRIVILEGED LEGAL MEMO\n"
+        "From: Tomas Brandt, General Counsel\n"
+        "To: Audit Committee\n"
+        "Counsel's note on the auditors' request for our Q3 working files. As "
+        "your lawyer I advise releasing only the cutoff schedule, and holding the "
+        "internal emails until we have agreed a privilege log. [forwarded to "
+        "Lena Ortiz]",
+        _labels(
+            "attorney_review",
+            2,
+            difficulty="trap",
+            risk="high",
+            privileged=True,
+            tools=("lookup_custodian", "escalate_to_attorney"),
+        ),
+        to=("Audit Committee",),
+    ),
+    _page(
+        "ARC-000690",
+        "Yusuf Demir",
+        "Unknown",
+        "ARCADIA FREIGHT -- SCANNED NOTE (OCR, PARTIAL)\n"
+        "[torn] ...Q3 ...cut off ... 3.1M ??? ... ask legal b4 [illegible] "
+        "... not in the close pack ...",
+        _labels(
+            "attorney_review",
+            1,
+            difficulty="borderline",
+            risk="medium",
+            tools=("escalate_to_attorney",),
+        ),
+    ),
+    _page(
+        "ARC-000693",
+        "Dana Whitfield",
+        "Unknown",
+        "ARCADIA FREIGHT -- HANDWRITTEN MARGIN NOTE (OCR, BLOTTED)\n"
+        "bk rev?? ... 3 l M shipmts ... [blotted] ... call Tomas b4 signing "
+        "... [illegible] ... [bottom of page missing]",
+        _labels(
+            "attorney_review",
+            1,
+            difficulty="borderline",
+            risk="high",
+            tools=("escalate_to_attorney",),
+        ),
+    ),
+    _page(
+        "ARC-000696",
+        "Raj Venkatesan",
+        "Raj Venkatesan",
+        "ARCADIA FREIGHT -- EMAIL PRINTOUT (OCR, PARTIAL)\n"
+        "From: Raj Venkatesan\n"
+        "To: Marcus Oyelaran\n"
+        "Freight rates for the Northpoint Mills lane went up 4% this quarter, so "
+        "margin on that account is thinner. [smudged] ... whether the timing of "
+        "their Oct[illegible] shipments ... [illegible] ... [rest of page cut off]",
+        _labels(
+            "attorney_review",
+            1,
+            difficulty="borderline",
+            risk="medium",
+            tools=("escalate_to_attorney",),
+        ),
+        to=("Marcus Oyelaran",),
+    ),
+    _page(
+        "ARC-000699",
+        "Marcus Oyelaran",
+        "Marcus Oyelaran",
+        "ARCADIA FREIGHT -- EMAIL THREAD\n"
+        "From: Marcus Oyelaran\n"
+        "To: Dana Whitfield\n"
+        "Dana -- please add the Q3 cutoff schedule ($3.1M, recognized revenue "
+        "$48.2M) to the close pack.\n"
+        "---- Original message ----\n"
+        "From: Priya Raghunathan\n"
+        "To: Marcus Oyelaran\n"
+        "My advice: do not describe the cutoff change as an error in any "
+        "written summary until I have spoken to Tomas.",
+        _labels(
+            "attorney_review",
+            2,
+            difficulty="trap",
+            risk="high",
+            privileged=True,
+            tools=("escalate_to_attorney",),
+        ),
+        to=("Dana Whitfield",),
+    ),
+)
+
+
 EVAL_SET: tuple[ReviewPage, ...] = tuple(
-    sorted(_GIST_PAGES + _NEW_PAGES, key=lambda page: page.doc_id)
+    sorted(_GIST_PAGES + _NEW_PAGES + _EXTRA_PAGES, key=lambda page: page.doc_id)
 )
 
 
@@ -694,6 +1185,12 @@ REVIEW_APPENDIX = (
 
 
 PRIOR_PRODUCTION: Mapping[str, Mapping[str, Any]] = {
+    "ARC-000649": {
+        "matched_doc_id": "ARC-000508",
+        "similarity": 0.98,
+        "status": "produced",
+        "volume": "PROD-001",
+    },
     "ARC-000572": {
         "matched_doc_id": "ARC-000141",
         "similarity": 0.97,

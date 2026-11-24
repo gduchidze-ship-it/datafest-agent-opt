@@ -11,7 +11,7 @@ from typing import Any
 
 import pandas as pd
 
-from doc_review_opt.agent.variants import VARIANT_LABELS
+from doc_review_opt.agent.variants import VARIANT_LABELS, VARIANT_ORDER
 from doc_review_opt.config import get_settings
 from doc_review_opt.experiment.metrics import (
     CEILINGS,
@@ -26,6 +26,7 @@ from doc_review_opt.experiment.simulation import variant_request_example
 from doc_review_opt.experiment.traces import Trace, deterministic_guardrail_check
 from doc_review_opt.fixtures import ATTORNEYS, EVAL_SET
 from doc_review_opt.models import PageResult, ReviewPage
+from doc_review_opt.reporting.chart_style import ROUTE_LABELS
 
 _TITLE_SEPARATOR = " -- "
 _ATTORNEY_TAG = " (attorney)"
@@ -304,6 +305,36 @@ def metrics_table(
     )
 
 
+def follow_page(
+    traces: Sequence[Trace],
+    doc_id: str,
+    variants: Sequence[str] = VARIANT_ORDER,
+) -> pd.DataFrame:
+    rows = []
+    for variant in variants:
+        own = [t for t in traces if t.variant == variant and t.doc_id == doc_id]
+        if not own:
+            raise ValueError(f"no trace for {doc_id} in {variant}")
+        trace = own[0]
+        models = ", ".join(dict.fromkeys(trace.models_used))
+        outcome = ROUTE_LABELS[trace.route]
+        if trace.attorney_decision is not None:
+            outcome += f", then {trace.attorney_decision}"
+        rows.append(
+            {
+                "round": trace.variant_label,
+                "engine and model": f"{trace.engine}: {models}",
+                "tools called": trace.tool_calls,
+                "tokens": f"{trace.sync_tokens:,}",
+                "seconds": f"{trace.latency_s:.2f}",
+                "model cost": f"${trace.model_cost_usd:.5f}",
+                "outcome": outcome,
+                "reason": trace.route_reason.replace("_", " "),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def confusion_table(
     traces: Sequence[Trace],
     variant: str,
@@ -336,6 +367,7 @@ __all__ = [
     "GateResult",
     "before_after",
     "confusion_table",
+    "follow_page",
     "gate",
     "gate_table",
     "holdout_table",

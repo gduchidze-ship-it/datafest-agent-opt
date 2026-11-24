@@ -1,50 +1,46 @@
-"""Cells for the condensed 25 minute demo notebook."""
+"""Cells for the condensed 20 minute demo notebook."""
 
 # ruff: noqa: E501
 from __future__ import annotations
 
+from doc_review_opt.agent.variants import (
+    BASELINE,
+    CACHING,
+    CONTROLS,
+    DECISION_MODEL,
+    ROUTING,
+    SPLIT,
+)
 from scripts.cells import Cell, code, md
+from scripts.nb_facts import Facts, facts
 
 
-def _round(
-    header: str,
-    diagram: str,
-    previous: str,
-    current: str,
-    page: str | None = None,
-    extras: list[Cell] | None = None,
-) -> list[Cell]:
+def _round(header: str, diagram: str, previous: str, current: str) -> list[Cell]:
     return [
         md(header),
-        code(f'draw_diagram("{diagram}")'),
-        *(
-            [
-                code(
-                    f'display(request_diff({previous}, {current}, {page}).style.hide(axis="index"))'
-                )
-            ]
-            if page
-            else []
-        ),
-        *(extras or []),
-        code(f"""
+        code(f'draw_diagram("{diagram}")', hidden=True),
+        code(
+            f"""
 display(before_after(summary, {previous}, {current}).style.hide(axis="index"))
 print(gate(traces, {current}))
 display(plot_progress(summary, upto_variant={current}))
-"""),
+""",
+            hidden=True,
+        ),
     ]
 
 
 def _intro() -> list[Cell]:
     return [
         md("""
-# Optimizing document review agents for cost and quality: decision models vs LLMs
+# Optimizing document review agents for cost and quality
 
-An e-discovery agent reviews each page: **produce**, **withhold**, **redact** or send to an **attorney**.
+**The promise:** find which steps need an LLM and which need only a decision model, and prove it with numbers.
 
-**Goal:** cut cost and latency without losing quality, and find which steps need an LLM and which only need a decision model.
+A law firm's e-discovery agent reads each page of a company's files and decides what to hand to the other side in a lawsuit. We make it cheaper and faster, one change at a time.
 """),
-        code("""
+        code(
+            """
 %matplotlib inline
 import os
 
@@ -70,114 +66,122 @@ LIVE = get_settings().live
 client = AsyncOpenAI(timeout=LIVE.timeout_s, max_retries=LIVE.max_retries) if RUN_LIVE_API_CALLS else None
 budget = BudgetTracker()
 print(f"Live: {RUN_LIVE_API_CALLS} | LangSmith: {LANGSMITH_TRACING} | budget stop: ${budget.limit_usd:.2f}")
-"""),
+""",
+            hidden=True,
+        ),
         md("""
-| Step | Section | Time |
+## Agenda: 20 minutes
+
+| Steps | What | Min |
 |---|---|---|
-| The agent | Business rules, the LangGraph graph, one run | 4 min |
-| Version 1 | Success criteria, eval set, baseline | 3 min |
-| Traces → find errors | Measure the baseline | 3 min |
-| Tune → climb | Rounds 1 to 5, one lever each | 12 min |
-| Tradeoffs | LLM vs Decisions | (in Round 3) |
-| Check | Results, live reality check, takeaways | 5 min |
+| 1-2 | The system and what we optimize | 3 |
+| 3-4 | The test set and the starting point | 2 |
+| 5-6 | One page, then harder pages | 2 |
+| 7-11 | Five rounds, one change each | 8 |
+| 12 | Results | 3 |
+| 13-14 | Live check and takeaways | 2 |
 """),
     ]
 
 
-def _agent() -> list[Cell]:
+def _system() -> list[Cell]:
     return [
         md("""
-## The agent
+## Step 1: The system in one picture
 
-**The business.** In a lawsuit, Arcadia Freight must hand the other side every relevant page. Each page gets exactly one outcome:
+A page goes in. One of four outcomes comes out: **produce**, **withhold**, **redact** (then produce) or **attorney review**.
 
+Three parts decide:
+1. **The engine** answers three questions: is the page relevant, is it privileged (lawyer advice), does it contain personal data?
+2. **The router** is plain code. It turns the three answers into one outcome.
+3. **An attorney** is asked only when the system is unsure or privilege is at stake.
+"""),
+        md("""
 | The page is… | Outcome | Why it matters |
 |---|---|---|
-| Lawyer\u2013client advice (privileged) | **attorney review**, then withhold | Producing it can waive privilege |
+| Lawyer-client advice (privileged) | **attorney review**, then withhold | Producing it can waive privilege |
 | Not relevant to the case | **withhold** | Nothing to hand over |
 | Relevant, with personal data | **redact**, then produce | Personal data must not leak |
 | Relevant and clean | **produce** | |
 | Unclear | **attorney review** | Safe, but $1.50 of attorney time |
 """),
-        code("""
-from doc_review_opt.fixtures import EVAL_SET
-from doc_review_opt.reporting.walkthrough import page_table
-
-OUTCOMES = ("produce", "withhold", "redact", "attorney_review")
-demo_pages = [next(p for p in EVAL_SET if p.labels.expected_route == o) for o in OUTCOMES]
-display(page_table(demo_pages).style.hide(axis="index"))
-"""),
         md("""
-## How the agent works: one LangGraph graph
-
-- `Send` fans the batch out: one `review_page` subgraph per page, run in parallel.
-- `classify` runs the engine. In Version 1 the agent's own answer picks the end node; from Round 3, plain code (`decide`) picks it from typed answers.
-- `attorney_review` pauses the graph with `interrupt()` until an attorney answers. `redact` jumps there only if redaction fails; LangGraph's drawing leaves out its normal exit.
-
-Dashed arrows are conditional. Every round keeps this graph; only what runs inside the nodes changes. Version 1's engine is one `gpt-6.1-terra` agent with five tools.
+The system runs as a LangGraph graph: boxes and arrows. `Send` starts one copy per page, in parallel. `classify` asks the engine. `attorney_review` calls `interrupt()`, which pauses the run until a person answers. Every round keeps this graph; only what runs inside the boxes changes.
 """),
-        code("""
+        code(
+            """
 from doc_review_opt.agent.graph import build_review_graph, review_checkpointer
 from doc_review_opt.agent.variants import BASELINE, VARIANTS, default_policy
 from doc_review_opt.experiment.simulation import build_simulated_engines
+from doc_review_opt.fixtures import EVAL_SET
 from doc_review_opt.reporting.diagrams import draw_graph
 
 policy = default_policy(VARIANTS[BASELINE])
 engine, redactor = build_simulated_engines(VARIANTS[BASELINE], EVAL_SET, policy)
 review_graph = build_review_graph(engine, redactor, review_checkpointer(), policy=policy)
 draw_graph(review_graph.get_graph(xray=True))
-"""),
+""",
+            hidden=True,
+        ),
         md("""
-### One run: four pages through Version 1
-
-The privileged page stops at `attorney_review`. The pause carries the page id and the reason, never page text.
+Four pages, one per outcome. The privileged page stops at the attorney pause. The pause carries the page id and the reason, never page text. Then the attorney answers and the run finishes.
 """),
-        code("""
+        code(
+            """
 from uuid import uuid4
-
+from langgraph.types import Command
+from doc_review_opt.reporting.walkthrough import page_table
+OUTCOMES = ("produce", "withhold", "redact", "attorney_review")
+demo_pages = [next(p for p in EVAL_SET if p.labels.expected_route == o) for o in OUTCOMES]
 config = {"configurable": {"thread_id": f"intro-{uuid4()}"}}
 paused = await review_graph.ainvoke({"pages": demo_pages, "results": []}, config)
 waiting = [pending.value["doc_id"] for pending in paused["__interrupt__"]]
 print(f"{len(paused['results'])} pages finished, {len(waiting)} waiting for an attorney: {', '.join(waiting)}")
-"""),
-        code('draw_diagram("human_in_the_loop")'),
-        code("""
-from langgraph.types import Command
-
 resume = {pending.id: "withhold" for pending in paused["__interrupt__"]}
 final = await review_graph.ainvoke(Command(resume=resume), config)
 display(page_table(demo_pages, final["results"]).style.hide(axis="index"))
+""",
+            hidden=True,
+        ),
+        code('draw_diagram("human_in_the_loop")', hidden=True),
+    ]
+
+
+def _optimize() -> list[Cell]:
+    fx = facts()
+    return [
+        md("""
+## Step 2: What we optimize
+
+**Make each page cheaper and faster without ever breaking the two hard rules:** never produce a privileged page, never leave personal data in a produced page.
+
+| Lever | What it changes | Cost it attacks |
+|---|---|---|
+| Controls | Tight prompt, fewer tools, strict JSON | Tokens |
+| Model routing | Cheap model for routine pages | Model price |
+| Decision model | One call to the Decisions API (typed answers, not free text) plus a code router | Latency, price |
+| Prompt caching | Reuse the unchanged prompt start | Input tokens |
+| Workflow split | Side jobs move to Batch | Waiting time |
+
+The same test runs after every change:
+"""),
+        code('draw_diagram("eval_pipeline")', hidden=True),
+        md(f"""
+A *trace* is the record of one page's run: what the engine did, tokens, seconds, cost, outcome. A *gate* is a pass/fail check. Hard gates and a pass rate of at least {fx.floor:.0%} of pages (the guardrail pass floor) accept or reject a round. Other metrics only warn, marked **(watch)** when below their floor. No LLM judge.
 """),
     ]
 
 
-def _loop() -> list[Cell]:
+def _test_set() -> list[Cell]:
+    fx = facts()
     return [
-        md("""
-## The optimization loop
+        md(f"""
+## Step 3: The test set
 
-Version 1 handles these four pages. Is it cheap, fast and safe on all 30? Measure, find errors, change one lever, measure again.
+{fx.pages} synthetic, labelled pages for one lawsuit; {fx.hard_pages} are traps or borderline. The first 30 were written first; 30 more add harder kinds: a lawyer only on cc, relayed advice, personal data in an irrelevant page, damaged scans, near-duplicates. Zero privileged pages produced and zero personal data left in produced text are the hard gates.
 """),
-        code('draw_diagram("optimization_loop")'),
-    ]
-
-
-def _version_one() -> list[Cell]:
-    return [
-        md("""
-## Success criteria
-
-- **Hard gates:** zero privileged pages produced, zero PII left in produced text.
-- **Accept a round** only if at least 95% of pages pass the guardrails.
-- **Cost** = model cost + attorney time ($1.50 per escalated page).
-"""),
-        md("""
-## Eval set
-
-30 synthetic, labelled pages for one matter; 10 are traps or borderline.
-"""),
-        code("""
-from doc_review_opt.fixtures import EVAL_SET
+        code(
+            """
 from doc_review_opt.reporting.reporting import plot_eval_set
 
 eval_table = pd.DataFrame(
@@ -189,281 +193,297 @@ eval_table = pd.DataFrame(
     for page in EVAL_SET
 )
 display(plot_eval_set(eval_table))
-"""),
-        md("""
-## Version 1: the bad baseline
-
-One `gpt-6.1-terra` super-agent: every tool on every page, verbose payloads, free-text answer.
-"""),
-        code('draw_diagram("bad_baseline")'),
+""",
+            hidden=True,
+        ),
     ]
 
 
-def _measure() -> list[Cell]:
+def _baseline() -> list[Cell]:
+    fx = facts()
+    base = fx.metrics[BASELINE]
     return [
-        md("""
-## Measure: traces, then errors
+        md(f"""
+## Step 4: The starting point
 
-Every round runs on all 30 pages (simulated, seconds). One trace per page per round.
+One `gpt-6.1-terra` agent does everything: every tool on every page, verbose payloads, free-text answer. We run it on all {fx.pages} pages (simulated, seconds). **p50 latency** is the typical page's time: half the pages are faster.
 """),
-        code('draw_diagram("eval_pipeline")'),
-        md("""
-- **Run and trace:** each variant goes through the same graph; every page leaves one trace.
-- **Grade:** deterministic guardrails and metrics read the trace and the page labels. No LLM judge.
-- **Gate and report:** hard gates and the guardrail pass floor accept or reject the round; reported metrics only warn, marked **(watch)** below a floor in `config.toml`.
-"""),
-        code("""
-from doc_review_opt.agent.variants import (
-    BASELINE,
-    CACHING,
-    CALIBRATED_POLICY,
-    CONTROLS,
-    DECISION_MODEL,
-    ROUTING,
-    SPLIT,
-    VARIANT_ORDER,
-)
-"""),
-        code("""
+        code('draw_diagram("bad_baseline")', hidden=True),
+        code(
+            """
+from doc_review_opt.agent.variants import BASELINE, CACHING, CALIBRATED_POLICY, CONTROLS, DECISION_MODEL, ROUTING, SPLIT, VARIANT_ORDER
 from doc_review_opt.experiment.simulation import simulate_all
 from doc_review_opt.experiment.traces import traces_frame
-from doc_review_opt.reporting.reporting import plot_progress, summarize
-from doc_review_opt.reporting.walkthrough import before_after, gate, metrics_table, request_diff, symptoms
+from doc_review_opt.reporting.reporting import plot_progress, plot_quality_gate, plot_round_chart, summarize
+from doc_review_opt.reporting.walkthrough import before_after, confusion_table, follow_page, gate, gate_table, holdout_table, metrics_table, symptoms
 
 traces = await simulate_all()
-frame = traces_frame(traces)
-summary = summarize(frame)
+summary = summarize(traces_frame(traces))
 SAMPLE_PAGE = next(p for p in EVAL_SET if p.labels.privileged)
-LOW_PAGE = next(p for p in EVAL_SET if p.labels.risk == "low" and not p.labels.privileged)
-"""),
-        code("""
-columns = ["variant_label", "doc_id", "route", "tool_calls", "sync_tokens", "latency_s", "model_cost_usd", "quality_score"]
-formats = {"sync_tokens": "{:,.0f}", "latency_s": "{:.2f}", "model_cost_usd": "${:.5f}", "quality_score": "{:.2f}"}
-display(frame[columns].head().style.format(formats).hide(axis="index"))
-"""),
-        code("""
+CLEAN_PAGE = next(p for p in EVAL_SET if p.doc_id == "ARC-000289")
+""",
+            hidden=True,
+        ),
+        code(
+            """
 print(symptoms(summary, BASELINE))
 print(gate(traces, BASELINE))
+display(metrics_table(traces, [BASELINE]).style.hide(axis="index"))
+""",
+            hidden=True,
+        ),
+        md(f"""
+**Errors found:** {fx.value(BASELINE, "mean_extra_tool_calls"):.1f} of {fx.value(BASELINE, "mean_tool_calls"):.0f} tool calls per page are unneeded, about {fx.value(BASELINE, "mean_sync_tokens") / 1000:.1f}k tokens per page, personal data left in produced text on {base.pii_leaked_pages} pages, route accuracy {base.route_accuracy:.0%}, {base.unnecessary_escalation_rate:.0%} needless attorney reviews. Each round fixes one thing.
+"""),
+    ]
+
+
+def _follow_reading(fx: Facts) -> str:
+    pv, pa = fx.trace(BASELINE, "ARC-000284"), fx.trace(SPLIT, "ARC-000284")
+    cv, ca = fx.trace(BASELINE, "ARC-000289"), fx.trace(SPLIT, "ARC-000289")
+    return (
+        f"**The privileged page** goes to an attorney in every round; no lever changes the safe outcome. "
+        f"Only the bill falls: {pv.sync_tokens:,} tokens and {pv.latency_s:.2f}s become {pa.sync_tokens:,} tokens and {pa.latency_s:.2f}s.\n\n"
+        f"**The clean page** is produced in every round. Its cost falls from ${cv.model_cost_usd:.5f} to ${ca.model_cost_usd:.5f}, "
+        f"and the {cv.tool_calls} tools the baseline called become {ca.tool_calls}."
+    )
+
+
+def _follow() -> list[Cell]:
+    return [
+        md("""
+## Step 5: Follow one page through every round
+
+Same page, six runs. Each row is one trace: engine, tools called, tokens, seconds, model cost, and the outcome with the router's reason.
 """),
         code("""
-display(metrics_table(traces, [BASELINE]).style.hide(axis="index"))
+for page in (SAMPLE_PAGE, CLEAN_PAGE):
+    display(page_table([page]).style.hide(axis="index"))
+    display(follow_page(traces, page.doc_id).style.hide(axis="index"))
 """),
+        md(_follow_reading(facts())),
+    ]
+
+
+def _examples() -> list[Cell]:
+    return [
         md("""
-**Errors found:** 4.2 of 5 tool calls per page are unneeded, about 8k tokens per page, PII left in produced text on 2 pages, route accuracy 77%, 25% needless attorney reviews. Each round fixes one thing.
+## Step 6: Harder pages
+
+Same rules, trickier pages. The outcome is what the labels expect.
+
+- **ARC-000615:** a lawyer is only on cc and nobody asks for advice, so it is produced.
+- **ARC-000622:** a "privileged" stamp, but no lawyer and no advice, so it is produced.
+- **ARC-000643:** full of personal data but irrelevant, so it is withheld whole.
+- **ARC-000649:** a resent copy of pages already produced, so it is withheld as a duplicate.
+- **ARC-000684:** "our lawyers said" with no lawyer named, so a person must look.
+- **ARC-000665:** a long workpaper with a phone number and email at the end, so it is redacted.
 """),
+        code(
+            """
+TRICKY = ("ARC-000615", "ARC-000622", "ARC-000643", "ARC-000649", "ARC-000684", "ARC-000665")
+tricky_pages = [next(p for p in EVAL_SET if p.doc_id == doc_id) for doc_id in TRICKY]
+display(page_table(tricky_pages).style.hide(axis="index"))
+""",
+            hidden=True,
+        ),
     ]
 
 
 def _round_one() -> list[Cell]:
+    fx = facts()
+    before, after = fx.metrics[BASELINE], fx.metrics[CONTROLS]
     return _round(
-        """
-## Round 1: prompt, tool and context controls
+        f"""
+## Step 7: Round 1, controls
 
-**Lever:** tight prompt, allow-listed tools, slim payloads, strict JSON answer.
+**What we changed:** a tight prompt, only the tools a page needs, slim tool results, and a strict JSON answer.
+
+**What happened:** tool calls fall from {fx.value(BASELINE, "mean_tool_calls"):.1f} to {fx.value(CONTROLS, "mean_tool_calls"):.1f} per page, tokens from {fx.value(BASELINE, "mean_sync_tokens"):,.0f} to {fx.value(CONTROLS, "mean_sync_tokens"):,.0f}, model cost from ${fx.value(BASELINE, "model_cost_per_page_usd"):.5f} to ${fx.value(CONTROLS, "model_cost_per_page_usd"):.5f}. Personal-data leaks go from {before.pii_leaked_pages} pages to {after.pii_leaked_pages}.
+
+**Why:** the baseline paid for work it never needed.
 """,
         "round1",
         "BASELINE",
         "CONTROLS",
-        "SAMPLE_PAGE",
     )
 
 
 def _round_two() -> list[Cell]:
+    fx = facts()
+    missed = fx.gates[ROUTING].failures.get("escalation_mismatch", 0)
     return _round(
-        """
-## Round 2: model routing
+        f"""
+## Step 8: Round 2, model routing
 
-**Lever:** `gpt-6-luna` triages; only risky pages go to `gpt-6.1-terra`.
+**What we changed:** a cheap `gpt-6-luna` model reads each page first; only risky pages go to the stronger `gpt-6.1-terra`.
 
-**Watch:** the cheapest round so far, but it misses one required escalation.
+**What happened:** model cost falls to ${fx.value(ROUTING, "model_cost_per_page_usd"):.5f} per page, the lowest so far, but the round misses {missed} required attorney review{"" if missed == 1 else "s"} (guardrail pass {fx.gates[ROUTING].pass_rate:.0%}).
+
+**Why:** a cheap first pass saves money and can slip. The gate caught it.
 """,
         "round2",
         "CONTROLS",
         "ROUTING",
-        "LOW_PAGE",
     )
 
 
-def _round_three_extras() -> list[Cell]:
+def _round_three() -> list[Cell]:
+    fx = facts()
     return [
-        md("### Three typed questions, one call"),
+        *_round(
+            f"""
+## Step 9: Round 3, a decision model
+
+**What we changed:** one call to the OpenAI Decisions API asks the three questions and returns typed answers, a score and two yes/no probabilities, not free text. The router (plain code) picks the outcome. A cascade (a cheap model first, a stronger one only when unsure) lets `gpt-6.1-terra` re-check the unsure pages.
+
+**What happened:** p50 latency falls from {fx.value(ROUTING, "p50_latency_s"):.2f}s to {fx.value(DECISION_MODEL, "p50_latency_s"):.2f}s and the missed attorney review is fixed, but model cost rises from ${fx.value(ROUTING, "model_cost_per_page_usd"):.5f} to ${fx.value(DECISION_MODEL, "model_cost_per_page_usd"):.5f} per page.
+
+**Why:** typed answers are fast and can be calibrated (their thresholds tuned on part of the pages); the second opinion costs a little.
+""",
+            "round3",
+            "ROUTING",
+            "DECISION_MODEL",
+        ),
+        md("""
+The router is plain code: readable, testable, auditable. A refusal or an error never produces a page; it fails safe to an attorney.
+"""),
         code("""
-from doc_review_opt.agent.classifiers.decisions import QUESTIONS, DecisionsClassifier
+import inspect
+
 from doc_review_opt.agent.routing import decide
 
-questions = pd.DataFrame(
-    {"name": q["name"], "type": q["type"], "instructions": q["instructions"][:90] + ("…" if len(q["instructions"]) > 90 else "")}
-    for q in QUESTIONS
-)
-display(questions.style.hide(axis="index"))
-"""),
-        code("""
-from doc_review_opt.experiment.live import BudgetedClassifier
-from doc_review_opt.experiment.simulation import SimulatedTypedClassifier
-from doc_review_opt.fixtures import PROTOCOL
-
-if RUN_LIVE_API_CALLS:
-    classifier = BudgetedClassifier(DecisionsClassifier(client), budget)
-else:
-    classifier = SimulatedTypedClassifier("decisions")
-result = await classifier.classify(SAMPLE_PAGE, PROTOCOL)
-"""),
-        code("""
-mode = "live" if RUN_LIVE_API_CALLS else "simulated"
-print(f"{SAMPLE_PAGE.doc_id} ({mode}): {result.latency_s:.2f}s, ${result.cost_usd:.5f}")
-if result.error:
-    print(result.error)
-else:
-    shown = (("responsive score (0 to 2)", "responsive", "score"), ("privileged probability", "privileged", "probability"), ("contains-PII probability", "contains_pii", "probability"))
-    for label, name, field in shown:
-        value = getattr(result.answers.get(name), field, None)
-        print(f"{label}: {'refused' if value is None else f'{value:.2f}'}")
-decision = decide(result, CALIBRATED_POLICY)
-print(f"route -> {decision.route} ({decision.reason})")
-"""),
-        md("### The router is plain code: readable, testable, auditable"),
-        code("import inspect\n\nprint(inspect.getsource(decide))"),
-        md(
-            "A refusal or an error never produces a page. It fails safe to an attorney."
-        ),
-        code("""
-from doc_review_opt.agent.classifiers.decisions import DECISIONS_MODEL
-from doc_review_opt.models import ClassifierResult, RefusalAnswer
-
-refused = ClassifierResult(
-    engine="decisions",
-    model=DECISIONS_MODEL,
-    answers={"privileged": RefusalAnswer(name="privileged")},
-)
-print(decide(refused))
+print(inspect.getsource(decide))
 """),
     ]
 
 
-def _round_three() -> list[Cell]:
-    return _round(
-        """
-## Round 3: replace the LLM with a decision model
-
-**Lever:** one Decisions call answers three typed questions; plain code routes the page; `gpt-6.1-terra` gives a second opinion on the ambiguous band only.
-
-**Watch:** model cost per page rises from Round 2, but the missed escalation is fixed and p50 latency halves.
-""",
-        "round3",
-        "ROUTING",
-        "DECISION_MODEL",
-        "SAMPLE_PAGE",
-        _round_three_extras(),
-    )
-
-
 def _tradeoffs() -> list[Cell]:
+    fx = facts()
     return [
-        md("""
-## LLM vs Decisions: the tradeoffs
+        md(f"""
+### Step 9b: LLM or Decisions?
 
-Same three questions, four engines, 30 pages (simulated, calibrated thresholds).
+Same three questions, four engines, {fx.pages} pages (simulated, calibrated thresholds). **Read it:** Decisions alone is the fastest and cheapest, but it sends more pages to an attorney ({fx.engine("decisions", "escalation_rate"):.0%} vs {fx.engine("llm-terra", "escalation_rate"):.0%} for `gpt-6.1-terra` as an LLM). That is why Round 3 adds the cascade.
 """),
-        code("""
+        code(
+            """
+from doc_review_opt.experiment.tradeoffs import engine_comparison_table, plot_engine_tradeoff, simulate_engine_comparison
+
 def show_engines(table):
-    view = table[["label", "accuracy_vs_labels", "cost_per_page_usd", "p50_latency_s", "escalation_rate", "privileged_leaks"]]
-    view = view.rename(columns={"label": "Engine", "accuracy_vs_labels": "Accuracy", "cost_per_page_usd": "$ / page", "p50_latency_s": "p50 (s)", "escalation_rate": "To attorney", "privileged_leaks": "Privileged leaks"})
+    view = table[["label", "accuracy_vs_labels", "cost_per_page_usd", "p50_latency_s", "escalation_rate"]]
+    view.columns = ["Engine", "Accuracy", "$ / page", "p50 (s)", "To attorney"]
     formats = {"Accuracy": "{:.0%}", "$ / page": "${:.5f}", "p50 (s)": "{:.2f}", "To attorney": "{:.0%}"}
     display(view.style.format(formats).hide(axis="index"))
-"""),
-        code("""
-from doc_review_opt.experiment.tradeoffs import engine_comparison_table, plot_engine_tradeoff, simulate_engine_comparison
 
 engine_runs = await simulate_engine_comparison(policy=CALIBRATED_POLICY)
 engines = engine_comparison_table(engine_runs)
 show_engines(engines)
 display(plot_engine_tradeoff(engines))
-"""),
+""",
+            hidden=True,
+        ),
         md("""
-**Read it:** Decisions alone is the fastest and cheapest, but it sends more pages to an attorney (50% vs 33%). That is why Round 3 adds the `gpt-6.1-terra` second opinion on the ambiguous band only.
+**Probabilities are a dial.** Move the privilege threshold: Decisions never leaks a privileged page; the LLMs' self-reported probabilities start leaking. Decisions cannot write text, extract spans or call tools, so each step gets the engine it needs.
 """),
-        md("""
-### Probabilities are a dial
-
-Move the privilege threshold. Decisions never leaks a privileged page; the LLMs' self-reported probabilities start leaking.
-"""),
-        code("""
+        code(
+            """
 from doc_review_opt.experiment.tradeoffs import plot_threshold_sweep, threshold_sweep
 
 display(plot_threshold_sweep(threshold_sweep(await simulate_engine_comparison(), EVAL_SET)))
-"""),
-        md("""
-### What Decisions can't do
-
-Write text, extract spans or call tools. Each step gets the engine it needs:
-"""),
-        code("""
-from doc_review_opt.experiment.tradeoffs import STEP_MATRIX
-
-display(pd.DataFrame(STEP_MATRIX).style.hide(axis="index"))
-"""),
-        code('draw_diagram("decisions_or_llm")'),
+""",
+            hidden=True,
+        ),
+        code('draw_diagram("decisions_or_llm")', hidden=True),
     ]
 
 
 def _round_four_five() -> list[Cell]:
+    fx = facts()
     return [
         *_round(
-            """
-## Round 4: prompt caching
+            f"""
+## Step 10: Round 4, prompt caching
 
-**Lever:** the stable protocol prefix goes first, with one cache key per matter.
+**What we changed:** the unchanged start of every prompt (the review protocol) goes first, with one cache key per matter. Caching means the provider remembers that start, so resending it is billed at a lower rate.
 
-**Watch:** cache writes cost 1.25x, so caching pays only at volume.
+**What happened:** model cost falls from ${fx.value(DECISION_MODEL, "model_cost_per_page_usd"):.5f} to ${fx.value(CACHING, "model_cost_per_page_usd"):.5f} per page.
+
+**Why, and the catch:** the first call writes the cache at 1.25x the normal price, so caching pays only at volume.
 """,
             "round4",
             "DECISION_MODEL",
             "CACHING",
-            "SAMPLE_PAGE",
         ),
         *_round(
-            """
-## Round 5: split the workflow
+            f"""
+## Step 11: Round 5, split the workflow
 
-**Lever:** privilege log, QA and tags leave the page path and go to Batch at 50% off.
+**What we changed:** the privilege log, QA and tags leave the page path and run later as Batch jobs (a queue the provider runs within 24 hours at 50% off).
+
+**What happened:** p50 latency falls from {fx.value(CACHING, "p50_latency_s"):.2f}s to {fx.value(SPLIT, "p50_latency_s"):.2f}s; model cost stays at about ${fx.value(SPLIT, "model_cost_per_page_usd"):.5f} per page.
+
+**Why:** side jobs nobody waits for should not slow the page.
 """,
             "round5",
             "CACHING",
             "SPLIT",
-            None,
         ),
     ]
 
 
-def _wrapup() -> list[Cell]:
+def _results() -> list[Cell]:
+    fx = facts()
+    default_cal, default_hold = (
+        fx.half("default", "calibration"),
+        fx.half("default", "holdout"),
+    )
+    refit_cal, refit_hold = fx.half("refit", "calibration"), fx.half("refit", "holdout")
     return [
-        md("## Results: the climb"),
-        code("""
-from doc_review_opt.reporting.reporting import plot_quality_gate, plot_round_chart
-from doc_review_opt.reporting.walkthrough import confusion_table, gate_table, holdout_table, metrics_table
+        md("""
+## Step 12: Results
 
+Every round on one chart, then every metric. Hard gates are on top and decide acceptance; the rest only warn.
+"""),
+        code(
+            """
 floor = get_settings().quality.guardrail_pass_floor
 display(plot_round_chart(summary))
 display(plot_quality_gate(gate_table(traces, VARIANT_ORDER), floor))
-"""),
-        code("""
-display(metrics_table(traces, VARIANT_ORDER).style.hide(axis="index"))
+""",
+            hidden=True,
+        ),
+        code(
+            """
+table = metrics_table(traces, VARIANT_ORDER)
+display(table.rename(columns=lambda name: name.replace("Round ", "R").split(":")[0]).style.hide(axis="index"))
 display(confusion_table(traces, SPLIT))
-"""),
-        code("""
+""",
+            hidden=True,
+        ),
+        code(
+            """
 from doc_review_opt.experiment.metrics import classifications_by_page, holdout_check
 
 report = holdout_check(classifications_by_page(engine_runs["decisions"]))
 display(holdout_table(report).style.hide(axis="index"))
 print(f"Leak-free on the unseen half: {report.holds} ({report.calibration_pages} and {report.holdout_pages} pages)")
+""",
+            hidden=True,
+        ),
+        md(f"""
+**Does calibration hold on unseen pages?** The policy is refit on one half of the pages (alternating within each route) and scored on the other. No leaks on unseen pages, and far cheaper than the default policy (default: {default_cal[0]:.0%} and {default_hold[0]:.0%} escalations). Escalations are {refit_cal[0]:.0%} on the calibration half and {refit_hold[0]:.0%} on the holdout half, and quality is {refit_cal[1]:.2f} and {refit_hold[1]:.2f}. Only the holdout rows are out of sample; {fx.holdout.holdout_pages} pages is a small sample.
 """),
-        md("""
-**Calibration holdout:** the policy is refit on one half of the pages (alternating within each route) and scored on the other. No leaks on unseen pages, and far cheaper than the default policy (default: 81% and 86% escalations). Escalations are 44% on the calibration half and 57% on the holdout half, and quality is 0.93 and 0.89. The thresholds were tuned on the calibration half, so only the holdout rows are out of sample; the holdout is only 14 pages, a small sample.
-"""),
-        md("""
-## Live reality check
+    ]
 
-Real APIs, 6 pages, 2026-11-18, $0.18 total.
+
+def _live() -> list[Cell]:
+    fx = facts()
+    return [
+        md(f"""
+## Step 13: Live reality check
+
+Real APIs, 2026-11-18, $0.18 total. The live run used 6 pages chosen from the original 30-page set, one per route in turn; the simulation above now uses all {fx.pages}.
 
 | Engine | Accuracy | $ / page | p50 |
 |---|---|---|---|
@@ -474,41 +494,40 @@ Real APIs, 6 pages, 2026-11-18, $0.18 total.
 
 Decisions is **about 6x faster** than `gpt-6-luna` and **4 to 6x cheaper** than `gpt-6.1-terra`, but **1.7x pricier** than `gpt-6-luna`.
 """),
-        code("""
+        code(
+            """
 from doc_review_opt.reporting.reporting import plot_sim_vs_live, recorded_live_note, recorded_live_summary
 
 display(plot_sim_vs_live(summary, recorded_live_summary(), recorded_live_note()))
-"""),
+""",
+            hidden=True,
+        ),
         md("""
 Optional, on stage: rerun the engine comparison on the real APIs. It takes about a minute, costs a few cents and sends LangSmith traces.
 """),
-        code("""
-from itertools import zip_longest
-
-from doc_review_opt.experiment.live import LIVE_PAGE_LIMIT
+        code(
+            """
+from doc_review_opt.experiment.live import pick_live_pages
 from doc_review_opt.experiment.tradeoffs import live_engine_comparison
 
-by_route = {}
-for page in EVAL_SET:
-    by_route.setdefault(page.labels.expected_route, []).append(page)
-live_pages = [p for group in zip_longest(*by_route.values()) for p in group if p]
-live_pages = live_pages[:LIVE_PAGE_LIMIT]
-"""),
-        code("""
-live_runs = {}
-if RUN_LIVE_API_CALLS:
-    live_runs = await live_engine_comparison(live_pages, client=client, budget=budget)
-if live_runs:
-    show_engines(engine_comparison_table(live_runs))
-    print("\\n".join(f"{n}: {r.trace_url or 'LangSmith tracing is off'}" for n, r in live_runs.items()))
-    print(f"Spend: ${budget.total_usd:.4f} of ${budget.limit_usd:.2f}")
-elif RUN_LIVE_API_CALLS:
-    print(f"Stopped by the budget: ${budget.total_usd:.2f} of ${budget.limit_usd:.2f}")
-else:
+if not RUN_LIVE_API_CALLS:
     print("Offline. Set RUN_LIVE_API_CALLS=true to rerun this on the real APIs.")
-"""),
+else:
+    live_runs = await live_engine_comparison(pick_live_pages(EVAL_SET), client=client, budget=budget)
+    if live_runs:
+        show_engines(engine_comparison_table(live_runs))
+        print("\\n".join(f"{n}: {r.trace_url or 'LangSmith tracing is off'}" for n, r in live_runs.items()))
+    print(f"Spend: ${budget.total_usd:.4f} of ${budget.limit_usd:.2f}")
+""",
+            hidden=True,
+        ),
+    ]
+
+
+def _closing() -> list[Cell]:
+    return [
         md("""
-## Takeaways
+## Step 14: Takeaways
 
 1. **Measure first.** A labelled eval set and hard gates before any tuning.
 2. **Cut waste before changing models.** Controls gave the biggest drop.
@@ -534,14 +553,18 @@ Last verified: November 18, 2026.
 def cells() -> list[Cell]:
     return [
         *_intro(),
-        *_agent(),
-        *_loop(),
-        *_version_one(),
-        *_measure(),
+        *_system(),
+        *_optimize(),
+        *_test_set(),
+        *_baseline(),
+        *_follow(),
+        *_examples(),
         *_round_one(),
         *_round_two(),
         *_round_three(),
         *_tradeoffs(),
         *_round_four_five(),
-        *_wrapup(),
+        *_results(),
+        *_live(),
+        *_closing(),
     ]
