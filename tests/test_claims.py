@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import itertools
 import re
 from collections import Counter
@@ -10,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from doc_review_opt.agent.routing import decide
 from doc_review_opt.agent.variants import (
     BASELINE,
     CACHING,
@@ -28,7 +30,7 @@ from doc_review_opt.experiment.tradeoffs import (
     threshold_sweep,
 )
 from doc_review_opt.fixtures import CALIBRATION, EVAL_SET, HOLDOUT
-from doc_review_opt.reporting.walkthrough import gate
+from doc_review_opt.reporting.walkthrough import gate, outcome_table
 from scripts.build_notebook import build_demo
 from scripts.nb_facts import Facts, facts
 from tests.test_eval_set import LIVE_IDS, ORIGINAL_IDS
@@ -241,15 +243,7 @@ def test_decisions_is_several_times_faster_and_far_cheaper_than_terra(
 
 def test_no_live_run_page_is_attorney_cc_and_the_text_says_so() -> None:
     by_id = {p.doc_id: p for p in EVAL_SET}
-    live_ids = (
-        "ARC-000141",
-        "ARC-000212",
-        "ARC-000284",
-        "ARC-000352",
-        "ARC-000163",
-        "ARC-000245",
-    )
-    assert not any(by_id[i].cc for i in live_ids)
+    assert not any(by_id[i].cc for i in LIVE_IDS)
     assert "none of the 6 pages in the live run was attorney-cc'd" in README
     assert "None of the 6 pages above was attorney-cc'd" not in README
     assert "Separate live probe (none of the 6 pages above was attorney-cc'd)" in README
@@ -266,3 +260,75 @@ def test_demo_reader_text_is_plain(fx: Facts) -> None:
     )
     assert floor in text
     assert text.index("p50 latency**") < text.index("p50 latency falls")
+
+
+def demo_text() -> str:
+    return "\n".join(c.source for c in build_demo().cells if c.cell_type == "markdown")
+
+
+def test_round_two_text_matches_the_gate(fx: Facts) -> None:
+    result = fx.gates[ROUTING]
+    assert result.accepted
+    assert result.pass_rate > fx.floor
+    assert result.failures == {"escalation_mismatch": 1}
+    text = demo_text()
+    sentence = (
+        f"1 miss in {fx.pages} pages stays above the {fx.floor:.0%} floor, "
+        "so Round 2 is accepted"
+    )
+    assert sentence in text
+    assert "The gate caught it" not in text
+    assert "Every round must pass the quality gate" not in text
+    assert "Cheapest is not best.** Check what each round gives up." in text
+
+
+def test_live_reading_matches_the_recorded_live_run(fx: Facts) -> None:
+    routing, controls = fx.live(ROUTING), fx.live(CONTROLS)
+    decision, caching = fx.live(DECISION_MODEL), fx.live(CACHING)
+    assert routing.p50_latency_s > controls.p50_latency_s
+    assert routing.quality < controls.quality
+    assert caching.model_cost_per_page_usd > decision.model_cost_per_page_usd
+    assert decision.quality == controls.quality
+    assert fx.engine("decisions", "accuracy_vs_labels") < 1
+    text = demo_text()
+    for figure in (
+        f"({routing.p50_latency_s:.2f}s vs {controls.p50_latency_s:.2f}s)",
+        f"(quality {routing.quality:.2f})",
+        f"(${caching.model_cost_per_page_usd:.5f} vs "
+        f"${decision.model_cost_per_page_usd:.5f} per page)",
+        f"its {fx.live_run.pages} pages (quality {decision.quality:.2f})",
+        f"{fx.engine('decisions', 'accuracy_vs_labels'):.0%} route accuracy",
+        "routing was slower and caching cost more",
+    ):
+        assert figure in text
+
+
+TRICKY_IDS = (
+    "ARC-000615",
+    "ARC-000622",
+    "ARC-000643",
+    "ARC-000649",
+    "ARC-000684",
+    "ARC-000665",
+)
+
+
+def test_harder_pages_table_shows_the_round_five_routes(fx: Facts) -> None:
+    pages = [p for i in TRICKY_IDS for p in EVAL_SET if p.doc_id == i]
+    table = outcome_table(list(fx.traces), pages, SPLIT)
+    for _, row in table.iterrows():
+        trace = fx.trace(SPLIT, row["doc_id"])
+        assert row["route"] == trace.route
+        assert row["route"] == row["expected"]
+    sources = [c.source for c in build_demo().cells if c.cell_type == "code"]
+    assert any("outcome_table(traces, tricky_pages, SPLIT)" in s for s in sources)
+    assert "what Round 5 did" in demo_text()
+
+
+def test_the_printed_router_source_backs_the_fail_safe_claim() -> None:
+    printed = inspect.getsource(decide)
+    assert "missing_or_refused_answer" in printed
+    assert "classifier_error" in printed
+    sources = [c.source for c in build_demo().cells if c.cell_type == "code"]
+    assert any("inspect.getsource(decide)" in s for s in sources)
+    assert "never produces a page; it fails safe to an attorney" in demo_text()

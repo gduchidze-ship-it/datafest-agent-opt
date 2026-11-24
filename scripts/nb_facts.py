@@ -9,7 +9,7 @@ from functools import lru_cache
 import pandas as pd
 
 from doc_review_opt.agent.variants import CALIBRATED_POLICY, VARIANT_ORDER
-from doc_review_opt.config import get_settings
+from doc_review_opt.config import LiveRound, LiveRun, get_settings
 from doc_review_opt.experiment.metrics import (
     HoldoutReport,
     VariantMetrics,
@@ -39,6 +39,7 @@ class Facts:
     gates: dict[str, GateResult]
     engines: pd.DataFrame
     holdout: HoldoutReport
+    live_run: LiveRun
 
     def value(self, variant: str, column: str) -> float:
         row = self.summary.loc[self.summary["variant"] == variant, column]
@@ -48,6 +49,9 @@ class Facts:
         return next(
             t for t in self.traces if t.variant == variant and t.doc_id == doc_id
         )
+
+    def live(self, variant: str) -> LiveRound:
+        return next(r for r in self.live_run.rounds if r.variant == variant)
 
     def engine(self, name: str, column: str) -> float:
         row = self.engines.loc[self.engines["engine"] == name, column]
@@ -81,4 +85,5 @@ def facts() -> Facts:
         gates={v: gate(traces, v) for v in VARIANT_ORDER},
         engines=engine_comparison_table(runs),
         holdout=holdout_check(results),
+        live_run=get_settings().live_run,
     )

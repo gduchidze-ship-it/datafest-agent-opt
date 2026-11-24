@@ -16,6 +16,7 @@ from doc_review_opt.agent.variants import (
     DECISION_MODEL,
     ORIGINAL_WORDING_VARIANT,
     ROUTING,
+    SPLIT,
     VARIANT_LABELS,
     VARIANT_ORDER,
     VARIANTS,
@@ -36,6 +37,7 @@ from doc_review_opt.reporting.walkthrough import (
     gate_table,
     holdout_table,
     metrics_table,
+    outcome_table,
     page_table,
     request_diff,
     symptoms,
@@ -402,3 +404,31 @@ def test_follow_page_lists_a_repeated_model_once() -> None:
     ]
     table = follow_page(twice, "P4", ["v"])
     assert table["engine and model"].tolist() == ["stub: gpt-6-luna"]
+
+
+def test_outcome_table_adds_the_round_route_and_reason_to_the_page_table(
+    traces: list[Trace],
+) -> None:
+    ids = ("ARC-000615", "ARC-000643", "ARC-000649")
+    pages = [p for p in EVAL_SET if p.doc_id in ids]
+    table = outcome_table(traces, pages, SPLIT)
+    assert list(table.columns) == [
+        "doc_id",
+        "page",
+        "from",
+        "expected",
+        "route",
+        "reason",
+    ]
+    by_id = {t.doc_id: t for t in traces if t.variant == SPLIT}
+    assert table["doc_id"].tolist() == [p.doc_id for p in pages]
+    assert table["route"].tolist() == [by_id[p.doc_id].route for p in pages]
+    assert table["reason"].tolist() == [
+        by_id[p.doc_id].route_reason.replace("_", " ") for p in pages
+    ]
+
+
+def test_outcome_table_rejects_a_page_without_a_trace(traces: list[Trace]) -> None:
+    page = EVAL_SET[0]
+    with pytest.raises(ValueError, match="no trace"):
+        outcome_table([t for t in traces if t.doc_id != page.doc_id], [page], SPLIT)

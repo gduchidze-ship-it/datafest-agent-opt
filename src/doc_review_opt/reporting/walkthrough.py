@@ -305,6 +305,19 @@ def metrics_table(
     )
 
 
+def outcome_table(
+    traces: Sequence[Trace], pages: Sequence[ReviewPage], variant: str
+) -> pd.DataFrame:
+    by_id = {t.doc_id: t for t in traces if t.variant == variant}
+    missing = [p.doc_id for p in pages if p.doc_id not in by_id]
+    if missing:
+        raise ValueError(f"no trace for {missing[0]} in {variant}")
+    table = page_table(pages)
+    table["route"] = [by_id[p.doc_id].route for p in pages]
+    table["reason"] = [by_id[p.doc_id].route_reason.replace("_", " ") for p in pages]
+    return table
+
+
 def follow_page(
     traces: Sequence[Trace],
     doc_id: str,
@@ -372,6 +385,7 @@ __all__ = [
     "gate_table",
     "holdout_table",
     "metrics_table",
+    "outcome_table",
     "page_table",
     "request_diff",
     "symptoms",

@@ -215,7 +215,7 @@ from doc_review_opt.agent.variants import BASELINE, CACHING, CALIBRATED_POLICY, 
 from doc_review_opt.experiment.simulation import simulate_all
 from doc_review_opt.experiment.traces import traces_frame
 from doc_review_opt.reporting.reporting import plot_progress, plot_quality_gate, plot_round_chart, summarize
-from doc_review_opt.reporting.walkthrough import before_after, confusion_table, follow_page, gate, gate_table, holdout_table, metrics_table, symptoms
+from doc_review_opt.reporting.walkthrough import before_after, confusion_table, follow_page, gate, gate_table, holdout_table, metrics_table, outcome_table, symptoms
 
 traces = await simulate_all()
 summary = summarize(traces_frame(traces))
@@ -270,20 +270,20 @@ def _examples() -> list[Cell]:
         md("""
 ## Step 6: Harder pages
 
-Same rules, trickier pages. The outcome is what the labels expect.
+Same rules, trickier pages. The table shows what the labels expect and what Round 5 did.
 
-- **ARC-000615:** a lawyer is only on cc and nobody asks for advice, so it is produced.
-- **ARC-000622:** a "privileged" stamp, but no lawyer and no advice, so it is produced.
-- **ARC-000643:** full of personal data but irrelevant, so it is withheld whole.
-- **ARC-000649:** a resent copy of pages already produced, so it is withheld as a duplicate.
-- **ARC-000684:** "our lawyers said" with no lawyer named, so a person must look.
-- **ARC-000665:** a long workpaper with a phone number and email at the end, so it is redacted.
+- **ARC-000615:** a lawyer is only on cc and nobody asks for advice.
+- **ARC-000622:** a "privileged" stamp, but no lawyer and no advice.
+- **ARC-000643:** full of personal data but irrelevant to the case.
+- **ARC-000649:** a resent copy of pages already produced.
+- **ARC-000684:** "our lawyers said", with no lawyer named.
+- **ARC-000665:** a long workpaper with a phone number and email at the end.
 """),
         code(
             """
 TRICKY = ("ARC-000615", "ARC-000622", "ARC-000643", "ARC-000649", "ARC-000684", "ARC-000665")
 tricky_pages = [next(p for p in EVAL_SET if p.doc_id == doc_id) for doc_id in TRICKY]
-display(page_table(tricky_pages).style.hide(axis="index"))
+display(outcome_table(traces, tricky_pages, SPLIT).style.hide(axis="index"))
 """,
             hidden=True,
         ),
@@ -318,9 +318,9 @@ def _round_two() -> list[Cell]:
 
 **What we changed:** a cheap `gpt-6-luna` model reads each page first; only risky pages go to the stronger `gpt-6.1-terra`.
 
-**What happened:** model cost falls to ${fx.value(ROUTING, "model_cost_per_page_usd"):.5f} per page, the lowest so far, but the round misses {missed} required attorney review{"" if missed == 1 else "s"} (guardrail pass {fx.gates[ROUTING].pass_rate:.0%}).
+**What happened:** model cost falls to ${fx.value(ROUTING, "model_cost_per_page_usd"):.5f} per page, the lowest so far. The gate records {missed} missed attorney review{"" if missed == 1 else "s"} (guardrail pass {fx.gates[ROUTING].pass_rate:.0%}), but {missed} miss in {fx.pages} pages stays above the {fx.floor:.0%} floor, so Round 2 is {"accepted" if fx.gates[ROUTING].accepted else "rejected"}.
 
-**Why:** a cheap first pass saves money and can slip. The gate caught it.
+**Why:** a cheap first pass saves money and can slip. Cheaper is not free.
 """,
         "round2",
         "CONTROLS",
@@ -502,6 +502,9 @@ display(plot_sim_vs_live(summary, recorded_live_summary(), recorded_live_note())
 """,
             hidden=True,
         ),
+        md(f"""
+**Reading the live chart.** Live Round 2 was slower than Round 1 ({fx.live(ROUTING).p50_latency_s:.2f}s vs {fx.live(CONTROLS).p50_latency_s:.2f}s) and misrouted a page (quality {fx.live(ROUTING).quality:.2f}). Live Round 4 caching cost more than Round 3 (${fx.live(CACHING).model_cost_per_page_usd:.5f} vs ${fx.live(DECISION_MODEL).model_cost_per_page_usd:.5f} per page). Live Decisions made no misroute on its {fx.live_run.pages} pages (quality {fx.live(DECISION_MODEL).quality:.2f}), while the {fx.pages}-page simulation shows {fx.engine("decisions", "accuracy_vs_labels"):.0%} route accuracy for Decisions alone.
+"""),
         md("""
 Optional, on stage: rerun the engine comparison on the real APIs. It takes about a minute, costs a few cents and sends LangSmith traces.
 """),
@@ -531,10 +534,10 @@ def _closing() -> list[Cell]:
 
 1. **Measure first.** A labelled eval set and hard gates before any tuning.
 2. **Cut waste before changing models.** Controls gave the biggest drop.
-3. **Cheapest is not best.** Every round must pass the quality gate.
+3. **Cheapest is not best.** Check what each round gives up.
 4. **Typed decision? Try Decisions with a code router.** Fast, calibratable, auditable.
 5. **Need text, tools or extraction? Keep an LLM**, the smallest that holds quality.
-6. **Re-measure live.** Live, Decisions was fastest, but the smallest LLM was cheaper.
+6. **Re-measure live.** Live, routing was slower and caching cost more; Decisions was fastest, but the smallest LLM was cheaper.
 """),
         md("""
 ## References

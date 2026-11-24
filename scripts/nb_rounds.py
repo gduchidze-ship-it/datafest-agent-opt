@@ -19,18 +19,11 @@ The live helper in [tool_agent.py](../src/doc_review_opt/agent/classifiers/tool_
 The example takes allowed tools from fixture labels; use evaluated logic in production. Live runs use the same graph and checks as the simulation, and every call is charged to the $1 budget.
 """),
         code("""
-from itertools import zip_longest
-
 from doc_review_opt.agent.classifiers.tool_agent import live_config_for_page
 from doc_review_opt.exceptions import BudgetExceededError
-from doc_review_opt.experiment.live import run_live_variant
+from doc_review_opt.experiment.live import pick_live_pages, run_live_variant
 
-by_route = {}
-for page in EVAL_SET:
-    by_route.setdefault(page.labels.expected_route, []).append(page)
-LIVE_PAGES = [
-    page for group in zip_longest(*by_route.values()) for page in group if page
-][:LIVE_PAGE_LIMIT]
+LIVE_PAGES = pick_live_pages(EVAL_SET)
 
 live_page = SAMPLE_PAGE
 print(live_config_for_page(live_page, CONTROLS))
