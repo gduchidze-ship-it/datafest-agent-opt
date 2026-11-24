@@ -10,15 +10,18 @@ from langsmith import traceable
 from openai import AsyncOpenAI, OpenAIError
 from pydantic import BaseModel, ValidationError
 
-from doc_review_opt._responses import completed_text, usage_from_response
-from doc_review_opt.config import get_settings
-from doc_review_opt.decisions import (
+from doc_review_opt.agent.classifiers.decisions import (
     Wording,
     page_block,
     protocol_block,
     questions,
     trace_inputs,
 )
+from doc_review_opt.agent.classifiers.responses import (
+    completed_text,
+    usage_from_response,
+)
+from doc_review_opt.config import get_settings
 from doc_review_opt.exceptions import UnusableReplyError
 from doc_review_opt.models import (
     Answer,

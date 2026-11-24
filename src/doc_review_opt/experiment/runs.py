@@ -5,25 +5,24 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from doc_review_opt.batch import background_work
-from doc_review_opt.decisions import RoutingPolicy
-from doc_review_opt.graph import (
+from doc_review_opt.agent.graph import (
     BatchOutcome,
-    Classifier,
-    Redactor,
     build_review_graph,
     review_checkpointer,
     run_batch,
 )
-from doc_review_opt.models import Disposition, ReviewPage
-from doc_review_opt.traces import (
+from doc_review_opt.agent.protocols import Classifier, Redactor
+from doc_review_opt.agent.routing import RoutingPolicy
+from doc_review_opt.agent.variants import VariantSpec
+from doc_review_opt.experiment.batch import background_work
+from doc_review_opt.experiment.traces import (
     BackgroundWork,
     Mode,
     RunInfo,
     Trace,
     trace_from_result,
 )
-from doc_review_opt.variants import VariantSpec
+from doc_review_opt.models import Disposition, ReviewPage
 
 
 @dataclass(frozen=True)

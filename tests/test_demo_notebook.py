@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from nbclient import NotebookClient
 
-from doc_review_opt.variants import CONTROLS, VARIANT_LABELS
+from doc_review_opt.agent.variants import CONTROLS, VARIANT_LABELS
 from scripts.build_notebook import build_demo
 
 FLAGS = ("RUN_LIVE_API_CALLS", "RUN_LLM_JUDGE", "LANGSMITH_TRACING")

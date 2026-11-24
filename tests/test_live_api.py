@@ -7,36 +7,41 @@ from typing import Any
 import httpx2
 import pytest
 
-from doc_review_opt._dispositions import parse_free_text, parse_json_disposition
-from doc_review_opt.batch import (
-    background_work,
-    build_background_batch,
-    write_batch_jsonl,
-)
-from doc_review_opt.cascade import (
+from doc_review_opt.agent.classifiers.cascade import (
     CascadeClassifier,
     PriorProductionGate,
     in_ambiguous_band,
 )
+from doc_review_opt.agent.classifiers.dispositions import (
+    parse_free_text,
+    parse_json_disposition,
+)
+from doc_review_opt.agent.classifiers.tool_agent import (
+    LiveAgentClassifier,
+    live_config_for_page,
+    run_tool_loop,
+)
+from doc_review_opt.agent.routing import DEFAULT_POLICY, decide
+from doc_review_opt.agent.variants import BASELINE, CONTROLS, ROUTING
 from doc_review_opt.config import get_settings
-from doc_review_opt.decisions import DEFAULT_POLICY, decide
 from doc_review_opt.exceptions import BilledCallError, BudgetExceededError
-from doc_review_opt.live_api import (
+from doc_review_opt.experiment.batch import (
+    background_work,
+    build_background_batch,
+    write_batch_jsonl,
+)
+from doc_review_opt.experiment.live import (
     JUDGE_MODEL,
     BudgetedClassifier,
     BudgetTracker,
-    LiveAgentClassifier,
     _trace_summary,
     build_live_engines,
     judge_page,
-    live_config_for_page,
     run_live_variant,
-    run_tool_loop,
 )
+from doc_review_opt.experiment.traces import RunInfo, trace_from_result
+from doc_review_opt.fixtures import EVAL_SET, PROTOCOL
 from doc_review_opt.models import ClassifierResult, PredicateAnswer
-from doc_review_opt.review_agent import EVAL_SET, PROTOCOL
-from doc_review_opt.traces import RunInfo, trace_from_result
-from doc_review_opt.variants import BASELINE, CONTROLS, ROUTING
 from tests.helpers import StubClassifier, make_result
 from tests.test_decisions_classifier import (
     OK_ANSWERS,

@@ -64,8 +64,8 @@ os.environ["LANGSMITH_TRACING"] = str(LANGSMITH_TRACING).lower()
 os.environ["LANGCHAIN_TRACING_V2"] = str(LANGSMITH_TRACING).lower()
 os.environ.setdefault("LANGSMITH_PROJECT", "doc-review-opt")
 from doc_review_opt.config import get_settings
-from doc_review_opt.diagrams import draw_diagram
-from doc_review_opt.live_api import BudgetTracker
+from doc_review_opt.experiment.live import BudgetTracker
+from doc_review_opt.reporting.diagrams import draw_diagram
 LIVE = get_settings().live
 client = AsyncOpenAI(timeout=LIVE.timeout_s, max_retries=LIVE.max_retries) if RUN_LIVE_API_CALLS else None
 budget = BudgetTracker()
@@ -100,8 +100,8 @@ def _agent() -> list[Cell]:
 | Unclear | **attorney review** | Safe, but $1.50 of attorney time |
 """),
         code("""
-from doc_review_opt.review_agent import EVAL_SET
-from doc_review_opt.walkthrough import page_table
+from doc_review_opt.fixtures import EVAL_SET
+from doc_review_opt.reporting.walkthrough import page_table
 
 OUTCOMES = ("produce", "withhold", "redact", "attorney_review")
 demo_pages = [next(p for p in EVAL_SET if p.labels.expected_route == o) for o in OUTCOMES]
@@ -117,10 +117,10 @@ display(page_table(demo_pages).style.hide(axis="index"))
 Dashed arrows are conditional. Every round keeps this graph; only what runs inside the nodes changes. Version 1's engine is one `gpt-6.1-terra` agent with five tools.
 """),
         code("""
-from doc_review_opt.diagrams import draw_graph
-from doc_review_opt.graph import build_review_graph, review_checkpointer
-from doc_review_opt.simulation import build_simulated_engines
-from doc_review_opt.variants import BASELINE, VARIANTS, default_policy
+from doc_review_opt.agent.graph import build_review_graph, review_checkpointer
+from doc_review_opt.agent.variants import BASELINE, VARIANTS, default_policy
+from doc_review_opt.experiment.simulation import build_simulated_engines
+from doc_review_opt.reporting.diagrams import draw_graph
 
 policy = default_policy(VARIANTS[BASELINE])
 engine, redactor = build_simulated_engines(VARIANTS[BASELINE], EVAL_SET, policy)
@@ -177,8 +177,8 @@ def _version_one() -> list[Cell]:
 30 synthetic, labelled pages for one matter; 10 are traps or borderline.
 """),
         code("""
-from doc_review_opt.reporting import plot_eval_set
-from doc_review_opt.review_agent import EVAL_SET
+from doc_review_opt.fixtures import EVAL_SET
+from doc_review_opt.reporting.reporting import plot_eval_set
 
 eval_table = pd.DataFrame(
     {
@@ -207,7 +207,7 @@ def _measure() -> list[Cell]:
 Every round runs on all 30 pages (simulated, seconds). One trace per page per round.
 """),
         code("""
-from doc_review_opt.variants import (
+from doc_review_opt.agent.variants import (
     BASELINE,
     CACHING,
     CALIBRATED_POLICY,
@@ -219,10 +219,10 @@ from doc_review_opt.variants import (
 )
 """),
         code("""
-from doc_review_opt.reporting import plot_progress, summarize
-from doc_review_opt.simulation import simulate_all
-from doc_review_opt.traces import traces_frame
-from doc_review_opt.walkthrough import before_after, gate, request_diff, symptoms
+from doc_review_opt.experiment.simulation import simulate_all
+from doc_review_opt.experiment.traces import traces_frame
+from doc_review_opt.reporting.reporting import plot_progress, summarize
+from doc_review_opt.reporting.walkthrough import before_after, gate, request_diff, symptoms
 
 traces = await simulate_all()
 frame = traces_frame(traces)
@@ -279,7 +279,8 @@ def _round_three_extras() -> list[Cell]:
     return [
         md("### Three typed questions, one call"),
         code("""
-from doc_review_opt.decisions import QUESTIONS, DecisionsClassifier, decide
+from doc_review_opt.agent.classifiers.decisions import QUESTIONS, DecisionsClassifier
+from doc_review_opt.agent.routing import decide
 
 questions = pd.DataFrame(
     {"name": q["name"], "type": q["type"], "instructions": q["instructions"][:90] + ("…" if len(q["instructions"]) > 90 else "")}
@@ -288,9 +289,9 @@ questions = pd.DataFrame(
 display(questions.style.hide(axis="index"))
 """),
         code("""
-from doc_review_opt.live_api import BudgetedClassifier
-from doc_review_opt.review_agent import PROTOCOL
-from doc_review_opt.simulation import SimulatedTypedClassifier
+from doc_review_opt.experiment.live import BudgetedClassifier
+from doc_review_opt.experiment.simulation import SimulatedTypedClassifier
+from doc_review_opt.fixtures import PROTOCOL
 
 if RUN_LIVE_API_CALLS:
     classifier = BudgetedClassifier(DecisionsClassifier(client), budget)
@@ -317,7 +318,7 @@ print(f"route -> {decision.route} ({decision.reason})")
             "A refusal or an error never produces a page. It fails safe to an attorney."
         ),
         code("""
-from doc_review_opt.decisions import DECISIONS_MODEL
+from doc_review_opt.agent.classifiers.decisions import DECISIONS_MODEL
 from doc_review_opt.models import ClassifierResult, RefusalAnswer
 
 refused = ClassifierResult(
@@ -362,7 +363,7 @@ def show_engines(table):
     display(view.style.format(formats).hide(axis="index"))
 """),
         code("""
-from doc_review_opt.tradeoffs import engine_comparison_table, plot_engine_tradeoff, simulate_engine_comparison
+from doc_review_opt.experiment.tradeoffs import engine_comparison_table, plot_engine_tradeoff, simulate_engine_comparison
 
 engine_runs = await simulate_engine_comparison(policy=CALIBRATED_POLICY)
 engines = engine_comparison_table(engine_runs)
@@ -378,7 +379,7 @@ display(plot_engine_tradeoff(engines))
 Move the privilege threshold. Decisions never leaks a privileged page; the LLMs' self-reported probabilities start leaking.
 """),
         code("""
-from doc_review_opt.tradeoffs import plot_threshold_sweep, threshold_sweep
+from doc_review_opt.experiment.tradeoffs import plot_threshold_sweep, threshold_sweep
 
 display(plot_threshold_sweep(threshold_sweep(await simulate_engine_comparison(), EVAL_SET)))
 """),
@@ -388,7 +389,7 @@ display(plot_threshold_sweep(threshold_sweep(await simulate_engine_comparison(),
 Write text, extract spans or call tools. Each step gets the engine it needs:
 """),
         code("""
-from doc_review_opt.tradeoffs import STEP_MATRIX
+from doc_review_opt.experiment.tradeoffs import STEP_MATRIX
 
 display(pd.DataFrame(STEP_MATRIX).style.hide(axis="index"))
 """),
@@ -429,8 +430,8 @@ def _wrapup() -> list[Cell]:
     return [
         md("## Results: the climb"),
         code("""
-from doc_review_opt.reporting import plot_quality_gate, plot_round_chart
-from doc_review_opt.walkthrough import gate_table
+from doc_review_opt.reporting.reporting import plot_quality_gate, plot_round_chart
+from doc_review_opt.reporting.walkthrough import gate_table
 
 display(plot_round_chart(summary))
 """),
@@ -453,7 +454,7 @@ Real APIs, 6 pages, 2026-11-18, $0.18 total.
 Decisions is **about 6x faster** than `gpt-6-luna` and **4 to 6x cheaper** than `gpt-6.1-terra`, but **1.7x pricier** than `gpt-6-luna`.
 """),
         code("""
-from doc_review_opt.reporting import plot_sim_vs_live, recorded_live_note, recorded_live_summary
+from doc_review_opt.reporting.reporting import plot_sim_vs_live, recorded_live_note, recorded_live_summary
 
 display(plot_sim_vs_live(summary, recorded_live_summary(), recorded_live_note()))
 """),
@@ -463,8 +464,8 @@ Optional, on stage: rerun the engine comparison on the real APIs. It takes about
         code("""
 from itertools import zip_longest
 
-from doc_review_opt.live_api import LIVE_PAGE_LIMIT
-from doc_review_opt.tradeoffs import live_engine_comparison
+from doc_review_opt.experiment.live import LIVE_PAGE_LIMIT
+from doc_review_opt.experiment.tradeoffs import live_engine_comparison
 
 by_route = {}
 for page in EVAL_SET:

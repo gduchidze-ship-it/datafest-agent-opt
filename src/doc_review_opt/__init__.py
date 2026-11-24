@@ -1,22 +1,19 @@
 """Optimizing a document-review agent for cost and quality: Decisions API vs LLM."""
 
-from doc_review_opt.decisions import (
+from doc_review_opt.agent.classifiers.decisions import (
     DecisionsClassifier,
-    RoutingPolicy,
     build_decisions_request,
-    decide,
-    route,
 )
-from doc_review_opt.graph import (
+from doc_review_opt.agent.classifiers.llm_probability import LLMProbabilityClassifier
+from doc_review_opt.agent.graph import (
     BatchOutcome,
-    Classifier,
-    OpenAIRedactor,
-    Redactor,
     build_review_graph,
     review_checkpointer,
     run_batch,
 )
-from doc_review_opt.llm_classifier import LLMProbabilityClassifier
+from doc_review_opt.agent.protocols import Classifier, Redactor
+from doc_review_opt.agent.redactor import OpenAIRedactor
+from doc_review_opt.agent.routing import RoutingPolicy, decide, route
 from doc_review_opt.models import (
     ClassifierResult,
     PageLabels,

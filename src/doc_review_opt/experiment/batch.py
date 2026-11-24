@@ -7,11 +7,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from doc_review_opt.agent.classifiers.decisions import page_block
 from doc_review_opt.config import get_settings
-from doc_review_opt.decisions import page_block
+from doc_review_opt.experiment.traces import BackgroundWork, Trace
 from doc_review_opt.models import ReviewPage, TokenUsage
 from doc_review_opt.pricing import BATCH_DISCOUNT, approx_tokens, estimate_cost_usd
-from doc_review_opt.traces import BackgroundWork, Trace
 
 SETTINGS = get_settings()
 BATCH_MODEL = SETTINGS.models.batch

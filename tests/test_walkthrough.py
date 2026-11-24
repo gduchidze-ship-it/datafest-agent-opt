@@ -5,13 +5,12 @@ import asyncio
 import pandas as pd
 import pytest
 
-from doc_review_opt.config import get_settings
-from doc_review_opt.graph import build_review_graph, review_checkpointer, run_batch
-from doc_review_opt.reporting import plot_quality_gate, summarize
-from doc_review_opt.review_agent import EVAL_SET
-from doc_review_opt.simulation import build_simulated_engines, simulate_all
-from doc_review_opt.traces import Trace, traces_frame
-from doc_review_opt.variants import (
+from doc_review_opt.agent.graph import (
+    build_review_graph,
+    review_checkpointer,
+    run_batch,
+)
+from doc_review_opt.agent.variants import (
     BASELINE,
     CONTROLS,
     ORIGINAL_WORDING_VARIANT,
@@ -21,7 +20,12 @@ from doc_review_opt.variants import (
     VARIANTS,
     default_policy,
 )
-from doc_review_opt.walkthrough import (
+from doc_review_opt.config import get_settings
+from doc_review_opt.experiment.simulation import build_simulated_engines, simulate_all
+from doc_review_opt.experiment.traces import Trace, traces_frame
+from doc_review_opt.fixtures import EVAL_SET
+from doc_review_opt.reporting.reporting import plot_quality_gate, summarize
+from doc_review_opt.reporting.walkthrough import (
     before_after,
     gate,
     gate_table,

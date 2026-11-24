@@ -10,6 +10,7 @@ from matplotlib.axes import Axes
 from matplotlib.colors import to_hex
 from matplotlib.figure import Figure
 
+from doc_review_opt.fixtures import EVAL_SET
 from doc_review_opt.models import (
     ClassifierResult,
     PredicateAnswer,
@@ -18,7 +19,6 @@ from doc_review_opt.models import (
     ReviewPage,
     ScoreAnswer,
 )
-from doc_review_opt.review_agent import EVAL_SET
 
 PAGE = EVAL_SET[0]
 REDACTED_TEXT = "Contact [REDACTED] at [REDACTED]."

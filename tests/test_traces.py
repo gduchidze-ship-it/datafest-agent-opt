@@ -2,9 +2,7 @@
 
 import pytest
 
-from doc_review_opt.models import ClassifierResult, PageResult, ReviewPage, TokenUsage
-from doc_review_opt.review_agent import EVAL_SET
-from doc_review_opt.traces import (
+from doc_review_opt.experiment.traces import (
     ATTORNEY_REVIEW_COST_USD_PER_PAGE,
     BackgroundWork,
     PageOutcome,
@@ -15,6 +13,8 @@ from doc_review_opt.traces import (
     trace_from_result,
     traces_frame,
 )
+from doc_review_opt.fixtures import EVAL_SET
+from doc_review_opt.models import ClassifierResult, PageResult, ReviewPage, TokenUsage
 
 PRIV = next(p for p in EVAL_SET if p.labels.privileged)
 PII = next(p for p in EVAL_SET if p.labels.expected_route == "redact")

@@ -6,11 +6,14 @@ from typing import Any, Literal
 import httpx2
 import pytest
 
-from doc_review_opt.evaluation import evaluate_answer_traces, summarize_answer_evals
-from doc_review_opt.live_api import BudgetTracker
+from doc_review_opt.experiment.evaluation import (
+    evaluate_answer_traces,
+    summarize_answer_evals,
+)
+from doc_review_opt.experiment.live import BudgetTracker
+from doc_review_opt.experiment.traces import RunInfo, trace_from_result
+from doc_review_opt.fixtures import EVAL_SET
 from doc_review_opt.models import ClassifierResult, PageResult
-from doc_review_opt.review_agent import EVAL_SET
-from doc_review_opt.traces import RunInfo, trace_from_result
 from tests.helpers import at
 from tests.test_decisions_classifier import client_for
 from tests.test_live_api import text_response

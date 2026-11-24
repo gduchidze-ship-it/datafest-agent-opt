@@ -18,7 +18,7 @@ This notebook measures a baseline document review agent, changes one thing per r
 What to look at: the dashed arrow, which is why we never stop after one round.
 """),
         code("""
-from doc_review_opt.diagrams import draw_diagram
+from doc_review_opt.reporting.diagrams import draw_diagram
 
 draw_diagram("optimization_loop")
 """),
@@ -110,7 +110,7 @@ os.environ["LANGCHAIN_TRACING_V2"] = str(LANGSMITH_TRACING).lower()
 os.environ.setdefault("LANGSMITH_PROJECT", "doc-review-opt")
 
 from doc_review_opt.config import get_settings
-from doc_review_opt.live_api import LIVE_PAGE_LIMIT, BudgetTracker
+from doc_review_opt.experiment.live import LIVE_PAGE_LIMIT, BudgetTracker
 
 LIVE = get_settings().live
 client = AsyncOpenAI(timeout=LIVE.timeout_s, max_retries=LIVE.max_retries) if RUN_LIVE_API_CALLS else None
@@ -172,7 +172,7 @@ Reasoning is off everywhere, so it is not a row here.
 30 synthetic pages: the six original pages plus borderline responsiveness, attorney-cc'd business mail, several personal-data kinds, OCR noise and near-duplicates. Each page is labelled for responsiveness (0 to 2), privilege, personal data, expected route, escalation, difficulty and risk.
 """),
         code("""
-from doc_review_opt.review_agent import CALIBRATION, EVAL_SET, HOLDOUT, MATTER
+from doc_review_opt.fixtures import CALIBRATION, EVAL_SET, HOLDOUT, MATTER
 
 eval_table = pd.DataFrame(
     {
@@ -197,23 +197,24 @@ display(eval_table.groupby(["expected_route", "difficulty"]).size().rename("page
 **How to read it.** Left: how many pages each route should end in. Right: how hard the pages are.
 """),
         code("""
-from doc_review_opt.reporting import plot_eval_set
+from doc_review_opt.reporting.reporting import plot_eval_set
 
 display(plot_eval_set(eval_table))
 """),
         md("""
 ## Support data and tools
 
-Five local functions in `review_agent.py` stand in for the matter's systems. The baseline returns oversized payloads; later rounds return only decision-critical fields. The next cell shows one slim custodian record.
+Five local functions in `agent/tools.py` stand in for the matter's systems. The baseline returns oversized payloads; later rounds return only decision-critical fields. The next cell shows one slim custodian record.
 """),
         code("""
-from doc_review_opt.review_agent import ATTORNEYS, lookup_custodian
+from doc_review_opt.agent.tools import lookup_custodian
+from doc_review_opt.fixtures import ATTORNEYS
 
 print(json.dumps(lookup_custodian(ATTORNEYS[0], payload="slim"), indent=2))
 """),
         code("""
+from doc_review_opt.agent.tools import SLIM_TOOLS, VERBOSE_TOOLS
 from doc_review_opt.pricing import approx_tokens
-from doc_review_opt.review_agent import SLIM_TOOLS, VERBOSE_TOOLS
 
 print("Verbose custodian payload tokens:", approx_tokens(lookup_custodian(ATTORNEYS[0], payload="verbose")))
 print("Slim custodian payload tokens:", approx_tokens(lookup_custodian(ATTORNEYS[0], payload="slim")))
@@ -243,10 +244,10 @@ What to look at: follow one page; three typed answers go in, plain code picks on
 draw_diagram("page_review")
 """),
         code("""
-from doc_review_opt.decisions import RoutingPolicy
-from doc_review_opt.graph import build_review_graph, review_checkpointer
-from doc_review_opt.simulation import build_simulated_engines
-from doc_review_opt.variants import CALIBRATED_POLICY, DECISION_MODEL, VARIANTS
+from doc_review_opt.agent.graph import build_review_graph, review_checkpointer
+from doc_review_opt.agent.routing import RoutingPolicy
+from doc_review_opt.agent.variants import CALIBRATED_POLICY, DECISION_MODEL, VARIANTS
+from doc_review_opt.experiment.simulation import build_simulated_engines
 
 graph_classifier, graph_redactor = build_simulated_engines(
     VARIANTS[DECISION_MODEL], EVAL_SET, CALIBRATED_POLICY
@@ -274,7 +275,7 @@ print(f"Attorney review assumption: ${get_settings().attorney.review_cost_usd_pe
         md("""
 ## Dry-run simulation
 
-The [simulation](../src/doc_review_opt/simulation.py) runs each variant on the same 30 pages through the review graph with simulated engines, so routing can really err. Cost is model cost plus attorney time per escalated page.
+The [simulation](../src/doc_review_opt/experiment/simulation.py) runs each variant on the same 30 pages through the review graph with simulated engines, so routing can really err. Cost is model cost plus attorney time per escalated page.
 
 - Decision-model rounds use thresholds calibrated on the calibration half.
 - Caching assumes a warm cache and the 1,024-token minimum; it is not measured.
@@ -282,9 +283,9 @@ The [simulation](../src/doc_review_opt/simulation.py) runs each variant on the s
 - `03a_router_only` (Decisions plus code router, no second opinion) is the "Decisions only" arm.
 """),
         code("""
-from doc_review_opt.simulation import simulate_all
-from doc_review_opt.traces import traces_frame
-from doc_review_opt.variants import EXTRA_VARIANTS, VARIANT_ORDER
+from doc_review_opt.agent.variants import EXTRA_VARIANTS, VARIANT_ORDER
+from doc_review_opt.experiment.simulation import simulate_all
+from doc_review_opt.experiment.traces import traces_frame
 
 traces = await simulate_all(include_extras=True)
 frame = traces_frame(traces)
@@ -296,7 +297,7 @@ frame.drop(columns="produced_text").head()
 One row per variant. `blended_cost_per_verified_page` is model cost plus attorney cost, divided by correctly dispositioned pages.
 """),
         code("""
-from doc_review_opt.reporting import summarize
+from doc_review_opt.reporting.reporting import summarize
 
 full_summary = summarize(frame)
 summary = full_summary[full_summary["variant"].isin(VARIANT_ORDER)].reset_index(drop=True)
@@ -369,7 +370,7 @@ show(
 Each row compares a round with the one before. `model_cost` is the API bill; `cost_per_page` adds attorney time.
 """),
         code("""
-from doc_review_opt.reporting import round_impact
+from doc_review_opt.reporting.reporting import round_impact
 
 impact = round_impact(summary)
 show(impact)
@@ -380,7 +381,7 @@ show(impact)
 **How to read it.** Left: tokens per page. Middle: model cost per page on a log scale. Right: quality. Simulated.
 """),
         code("""
-from doc_review_opt.reporting import plot_round_chart
+from doc_review_opt.reporting.reporting import plot_round_chart
 
 display(plot_round_chart(summary))
 """),
@@ -388,7 +389,7 @@ display(plot_round_chart(summary))
 **How to read it.** Left: model cost per page, with the change from the previous round. Right: median latency.
 """),
         code("""
-from doc_review_opt.reporting import plot_cost_latency
+from doc_review_opt.reporting.reporting import plot_cost_latency
 
 display(plot_cost_latency(summary))
 """),
@@ -398,7 +399,7 @@ display(plot_cost_latency(summary))
 **How to read it.** Orange is attorney time, blue is the model bill. The model bill is the sliver at the bottom.
 """),
         code("""
-from doc_review_opt.reporting import plot_cost_split
+from doc_review_opt.reporting.reporting import plot_cost_split
 
 display(plot_cost_split(summary))
 """),
@@ -415,19 +416,19 @@ Every round has six beats: **symptom**, **lever**, **diff**, **re-measure**, **q
         code("""
 from collections import Counter
 
-from doc_review_opt.reporting import per_page_view, plot_progress
-from doc_review_opt.simulation import variant_request_example
-from doc_review_opt.traces import deterministic_guardrail_check
-from doc_review_opt.variants import (
+from doc_review_opt.agent.variants import (
     BASELINE,
     CACHING,
     CONTROLS,
     ORIGINAL_WORDING_VARIANT,
-    ROUTING,
     ROUTER_ONLY,
+    ROUTING,
     SPLIT,
     VARIANT_LABELS,
 )
+from doc_review_opt.experiment.simulation import variant_request_example
+from doc_review_opt.experiment.traces import deterministic_guardrail_check
+from doc_review_opt.reporting.reporting import per_page_view, plot_progress
 
 GUARDRAIL_FLOOR = get_settings().quality.guardrail_pass_floor
 PAGE_BY_ID = {page.doc_id: page for page in EVAL_SET}

@@ -2,21 +2,17 @@
 
 import pytest
 
-from doc_review_opt.models import PageLabels, ReviewPage
-from doc_review_opt.pricing import approx_tokens
-from doc_review_opt.review_agent import (
-    ATTORNEYS,
-    CALIBRATION,
-    EVAL_SET,
-    HOLDOUT,
-    PROTOCOL,
+from doc_review_opt.agent.prompts import STABLE_REVIEW_PREFIX
+from doc_review_opt.agent.tools import (
     SLIM_TOOLS,
-    STABLE_REVIEW_PREFIX,
     VERBOSE_TOOLS,
     UnknownToolError,
     allowed_tool_choice,
     execute_local_tool,
 )
+from doc_review_opt.fixtures import ATTORNEYS, CALIBRATION, EVAL_SET, HOLDOUT, PROTOCOL
+from doc_review_opt.models import PageLabels, ReviewPage
+from doc_review_opt.pricing import approx_tokens
 
 LABELS = [(page.doc_id, page.labels) for page in EVAL_SET]
 

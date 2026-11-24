@@ -14,7 +14,51 @@ from matplotlib.figure import Figure
 from matplotlib.ticker import PercentFormatter
 from openai import AsyncOpenAI
 
-from doc_review_opt.chart_style import (
+from doc_review_opt.agent.classifiers.decisions import DecisionsClassifier
+from doc_review_opt.agent.classifiers.llm_probability import LLMProbabilityClassifier
+from doc_review_opt.agent.classifiers.tool_agent import LiveAgentClassifier
+from doc_review_opt.agent.prompts import REDACTION_PROMPT
+from doc_review_opt.agent.protocols import Classifier
+from doc_review_opt.agent.redactor import OpenAIRedactor
+from doc_review_opt.agent.routing import (
+    DEFAULT_POLICY,
+    RoutingPolicy,
+    decide,
+    flags_pii,
+)
+from doc_review_opt.agent.variants import (
+    CALIBRATED_POLICY,
+    CONTROLS,
+    DECISION_MODEL,
+    ROUTER_ONLY,
+    VARIANTS,
+)
+from doc_review_opt.config import Calibration, get_settings
+from doc_review_opt.exceptions import BudgetExceededError
+from doc_review_opt.experiment.live import LIVE_PAGE_LIMIT, BudgetTracker, run_traced
+from doc_review_opt.experiment.runs import (
+    ReviewRun,
+    review_pages,
+    scripted_attorney_decisions,
+)
+from doc_review_opt.experiment.simulation import (
+    SimulatedAgentClassifier,
+    SimulatedRedactor,
+    SimulatedTypedClassifier,
+    scrub_pii,
+    simulate_variant,
+)
+from doc_review_opt.experiment.traces import (
+    ATTORNEY_REVIEW_COST_USD_PER_PAGE,
+    PageOutcome,
+    Trace,
+    evaluate_trace_quality,
+    traces_frame,
+)
+from doc_review_opt.fixtures import EVAL_SET
+from doc_review_opt.models import ClassifierResult, ReviewPage, TokenUsage
+from doc_review_opt.pricing import approx_tokens, estimate_cost_usd
+from doc_review_opt.reporting.chart_style import (
     CHART,
     PALETTE,
     add_legend,
@@ -22,47 +66,6 @@ from doc_review_opt.chart_style import (
     label_bars,
     new_figure,
     style_axis,
-)
-from doc_review_opt.config import Calibration, get_settings
-from doc_review_opt.decisions import (
-    DEFAULT_POLICY,
-    DecisionsClassifier,
-    RoutingPolicy,
-    decide,
-    flags_pii,
-)
-from doc_review_opt.exceptions import BudgetExceededError
-from doc_review_opt.graph import Classifier, OpenAIRedactor
-from doc_review_opt.live_api import (
-    LIVE_PAGE_LIMIT,
-    BudgetTracker,
-    LiveAgentClassifier,
-    run_traced,
-)
-from doc_review_opt.llm_classifier import LLMProbabilityClassifier
-from doc_review_opt.models import ClassifierResult, ReviewPage, TokenUsage
-from doc_review_opt.pricing import approx_tokens, estimate_cost_usd
-from doc_review_opt.review_agent import EVAL_SET, REDACTION_PROMPT, scrub_pii
-from doc_review_opt.runs import ReviewRun, review_pages, scripted_attorney_decisions
-from doc_review_opt.simulation import (
-    SimulatedAgentClassifier,
-    SimulatedRedactor,
-    SimulatedTypedClassifier,
-    simulate_variant,
-)
-from doc_review_opt.traces import (
-    ATTORNEY_REVIEW_COST_USD_PER_PAGE,
-    PageOutcome,
-    Trace,
-    evaluate_trace_quality,
-    traces_frame,
-)
-from doc_review_opt.variants import (
-    CALIBRATED_POLICY,
-    CONTROLS,
-    DECISION_MODEL,
-    ROUTER_ONLY,
-    VARIANTS,
 )
 
 logger = logging.getLogger(__name__)

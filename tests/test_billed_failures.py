@@ -7,24 +7,23 @@ from typing import Any
 import httpx2
 import pytest
 
-from doc_review_opt.decisions import DecisionsClassifier
-from doc_review_opt.graph import (
-    OpenAIRedactor,
-    RedactionError,
+from doc_review_opt.agent.classifiers.decisions import DecisionsClassifier
+from doc_review_opt.agent.classifiers.llm_probability import LLMProbabilityClassifier
+from doc_review_opt.agent.classifiers.tool_agent import LiveAgentClassifier
+from doc_review_opt.agent.graph import (
     build_review_graph,
     review_checkpointer,
     run_batch,
 )
-from doc_review_opt.live_api import (
+from doc_review_opt.agent.redactor import OpenAIRedactor, RedactionError
+from doc_review_opt.agent.variants import CONTROLS, ROUTING
+from doc_review_opt.experiment.live import (
     BudgetedClassifier,
     BudgetedRedactor,
     BudgetTracker,
-    LiveAgentClassifier,
 )
-from doc_review_opt.llm_classifier import LLMProbabilityClassifier
-from doc_review_opt.review_agent import PROTOCOL
-from doc_review_opt.traces import RunInfo, trace_from_result
-from doc_review_opt.variants import CONTROLS, ROUTING
+from doc_review_opt.experiment.traces import RunInfo, trace_from_result
+from doc_review_opt.fixtures import PROTOCOL
 from tests.helpers import PAGE, StubClassifier, make_result
 from tests.test_decisions_classifier import (
     OK_ANSWERS,

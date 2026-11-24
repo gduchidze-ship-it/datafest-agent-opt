@@ -5,15 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from doc_review_opt.config import VariantConfig, get_settings
-from doc_review_opt.decisions import DEFAULT_POLICY, RoutingPolicy
-from doc_review_opt.review_agent import (
+from doc_review_opt.agent.prompts import (
     BAD_BASELINE_PROMPT,
     CONTROLLED_PROMPT,
-    SLIM_TOOLS,
     STABLE_REVIEW_PREFIX,
-    VERBOSE_TOOLS,
 )
+from doc_review_opt.agent.routing import DEFAULT_POLICY, RoutingPolicy
+from doc_review_opt.agent.tools import SLIM_TOOLS, VERBOSE_TOOLS
+from doc_review_opt.config import VariantConfig, get_settings
 
 SETTINGS = get_settings()
 BASELINE = "00_bad_baseline"

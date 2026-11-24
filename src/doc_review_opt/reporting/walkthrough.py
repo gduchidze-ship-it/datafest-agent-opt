@@ -10,12 +10,12 @@ from typing import Any
 
 import pandas as pd
 
+from doc_review_opt.agent.variants import VARIANT_LABELS
 from doc_review_opt.config import get_settings
+from doc_review_opt.experiment.simulation import variant_request_example
+from doc_review_opt.experiment.traces import Trace, deterministic_guardrail_check
+from doc_review_opt.fixtures import ATTORNEYS, EVAL_SET
 from doc_review_opt.models import PageResult, ReviewPage
-from doc_review_opt.review_agent import ATTORNEYS, EVAL_SET
-from doc_review_opt.simulation import variant_request_example
-from doc_review_opt.traces import Trace, deterministic_guardrail_check
-from doc_review_opt.variants import VARIANT_LABELS
 
 _TITLE_SEPARATOR = " -- "
 _ATTORNEY_TAG = " (attorney)"

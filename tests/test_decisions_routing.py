@@ -2,7 +2,7 @@
 
 import pytest
 
-from doc_review_opt.decisions import RoutingPolicy, decide, flags_pii, route
+from doc_review_opt.agent.routing import RoutingPolicy, decide, flags_pii, route
 from doc_review_opt.models import ClassifierResult
 from tests.helpers import make_result, refused
 

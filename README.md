@@ -124,27 +124,31 @@ Copy `.env.example` to `.env` (git-ignored) and fill in the keys. Values already
 
 All live cells share one `BudgetTracker` with a **$1 hard stop** (set in `src/doc_review_opt/config.toml`) and run on `LIVE_PAGE_LIMIT` pages (default 6). Before a live run the tracker reserves the per-page ceiling (classification plus redaction, from `config.toml`) for every page in the run, and refuses to start if that could cross the limit; the agent tool loop enforces the per-page classification ceiling by closing early with `tool_choice="none"`, so in-flight work cannot push spend past the limit. Judge calls reserve `max_concurrency` times the judge-call ceiling. A live demo takes a couple of minutes. The Batch example only writes `outputs/background_batch.jsonl`; its submission code is shown, never executed.
 
-## Layout
+## Repository layout
 
-| Path | Role |
+The package has three layers. The agent is what reviews a document. The experiment layer measures and varies the agent. The reporting layer turns those measurements into charts, diagrams and tables.
+
+The dependency rule: the agent imports neither the experiment layer nor the reporting layer, and never matplotlib, pandas or `langsmith.evaluation`. Experiments import the agent, and reporting sits on top of both. The shared foundation (`models`, `config`, `exceptions`, `pricing`, `fixtures`) imports from none of the three layers. `tests/test_architecture.py` enforces this by parsing the imports.
+
+| Path under `src/doc_review_opt/` | Role |
 |---|---|
-| `src/doc_review_opt/config.toml`, `config.py` | Every threshold, price, model id and constant, loaded into frozen typed settings |
-| `review_agent.py` | Protocol, 30 synthetic labelled pages, calibration/holdout split, mock tools, prompts |
-| `decisions.py` | Decisions questions and request, `RoutingPolicy` and the code router, the Decisions classifier |
-| `llm_classifier.py` | The LLM classifier that reports its own probabilities |
-| `graph.py` | The LangGraph review graph, interrupt payload, redactor, batch runner, `review_checkpointer()` |
-| `models.py` | Frozen pydantic value types |
+| `config.toml`, `config.py` | Every threshold, price, model id and constant, loaded into frozen typed settings |
+| `models.py`, `exceptions.py` | Frozen pydantic value types and the error types |
 | `pricing.py` | Price table and cost estimator (cached input, cache writes, Batch discount) |
-| `simulation.py` | Deterministic simulated engines, variants and request examples |
-| `variants.py`, `runs.py`, `cascade.py` | The six optimization rounds, running a variant through the graph, the second-opinion cascade and prior-production gate |
-| `traces.py`, `reporting.py` | Trace schema, quality scoring and guardrails, summaries, round deltas and charts |
-| `live_api.py`, `batch.py`, `_responses.py` | Live Responses loop, budget tracker, LangSmith tracing, judge, Batch JSONL |
-| `evaluation.py` | Deterministic guardrails plus the optional LLM judge |
-| `tradeoffs.py` | Step matrix, engine comparison, threshold calibration and sweep, cascade analysis |
-| `scenarios.py` | Architecture options, operating scenarios and the cookbook fit score |
-| `scripts/` | Notebook builder |
-| `notebooks/` | The executed notebook |
-| `tests/` | Offline tests, including a headless execution of the notebook |
+| `fixtures.py` | The matter, custodians, review protocol, prior production index and the 30 labelled pages with the calibration/holdout split |
+| `agent/graph.py`, `state.py`, `nodes.py` | The LangGraph review graph, its state and interrupt payload, its nodes, the batch runner and `review_checkpointer()` |
+| `agent/routing.py` | `RoutingPolicy` and the code router that turns typed answers into a route |
+| `agent/protocols.py`, `redactor.py` | The `Classifier` and `Redactor` protocols and the OpenAI redactor |
+| `agent/prompts.py`, `tools.py` | Prompt text, the mock review tools and their function schemas |
+| `agent/variants.py` | The six optimization rounds as prompt, tool and config bundles |
+| `agent/classifiers/` | The Decisions classifier, the LLM probability classifier, the tool-calling agent, the second-opinion cascade with the prior-production gate, and disposition and response parsing |
+| `experiment/simulation.py`, `runs.py`, `traces.py` | Deterministic simulated engines, running a variant through the graph, trace schema, quality scoring and guardrails |
+| `experiment/live.py`, `batch.py`, `evaluation.py` | Budget tracker, LangSmith tracing, live runs and the LLM judge, Batch JSONL, deterministic guardrails |
+| `experiment/tradeoffs.py`, `scenarios.py` | Step matrix, engine comparison, threshold calibration and sweep, cascade analysis, architecture options and the cookbook fit score |
+| `reporting/reporting.py`, `chart_style.py` | Summaries, round deltas and charts |
+| `reporting/diagrams.py`, `walkthrough.py` | Diagrams drawn from `diagrams.toml` and the demo walkthrough tables |
+
+Outside the package, `scripts/` holds the notebook builder, `notebooks/` the executed notebooks, and `tests/` the offline tests, including a headless execution of both notebooks.
 
 ## Simulated before and after
 

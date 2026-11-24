@@ -17,22 +17,22 @@ from matplotlib.colors import to_hex
 from matplotlib.figure import Figure
 from matplotlib.patches import FancyArrowPatch
 
-from doc_review_opt import diagrams
+from doc_review_opt.agent.graph import build_review_graph, review_checkpointer
 from doc_review_opt.config import (
     DiagramSettings,
     get_diagrams,
     get_settings,
     parse_diagrams,
 )
-from doc_review_opt.diagrams import (
+from doc_review_opt.exceptions import ConfigError, DiagramLayoutError
+from doc_review_opt.reporting import diagrams
+from doc_review_opt.reporting.diagrams import (
     DiagramFigure,
     draw_diagram,
     draw_graph,
     graph_spec,
     list_diagrams,
 )
-from doc_review_opt.exceptions import ConfigError, DiagramLayoutError
-from doc_review_opt.graph import build_review_graph, review_checkpointer
 from tests.helpers import FakeRedactor, StubClassifier, make_result
 
 EXPECTED = {
