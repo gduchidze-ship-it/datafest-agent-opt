@@ -14,6 +14,7 @@ FLAGS = ("RUN_LIVE_API_CALLS", "RUN_LLM_JUDGE", "LANGSMITH_TRACING")
 SECRETS = ("OPENAI_API_KEY", "LANGSMITH_API_KEY")
 MIN_CELLS = 100
 BAD_MARKERS = ("Deserializing unregistered type", "Warning")
+DEMO_ONLY_DIAGRAMS = {"eval_pipeline"}
 
 
 def test_builder_is_deterministic() -> None:
@@ -29,8 +30,9 @@ def test_diagrams_are_drawn_cells_not_mermaid_blocks() -> None:
     drawn = [
         c.source for c in cells if c.cell_type == "code" and "draw_diagram(" in c.source
     ]
-    assert len(drawn) == len(list_diagrams())
-    for name in list_diagrams():
+    long_diagrams = [n for n in list_diagrams() if n not in DEMO_ONLY_DIAGRAMS]
+    assert len(drawn) == len(long_diagrams)
+    for name in long_diagrams:
         assert any(f'draw_diagram("{name}")' in source for source in drawn)
 
 

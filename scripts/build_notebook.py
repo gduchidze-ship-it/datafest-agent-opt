@@ -20,9 +20,10 @@ KERNELSPEC = {"display_name": "Python 3", "language": "python", "name": "python3
 
 
 def _to_cell(index: int, cell: Cell) -> NotebookNode:
-    kind, source = cell
-    make = new_markdown_cell if kind == "markdown" else new_code_cell
-    node: NotebookNode = make(source, id=f"cell-{index:03d}")  # type: ignore[no-untyped-call]
+    make = new_markdown_cell if cell.kind == "markdown" else new_code_cell
+    node: NotebookNode = make(cell.source, id=f"cell-{index:03d}")  # type: ignore[no-untyped-call]
+    if cell.hidden:
+        node.metadata["jupyter"] = {"source_hidden": True}
     return node
 
 

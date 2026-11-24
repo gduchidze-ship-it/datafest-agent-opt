@@ -173,6 +173,7 @@ def test_route_mix_and_scorecard_cover_every_round(frame: pd.DataFrame) -> None:
     assert_clean_chart(mix, 1)
     assert bar_colors(mix.axes[0])[0] == PALETTE.blue
     assert len(mix.axes[0].get_yticklabels()) == len(VARIANT_ORDER) + 1
+    assert mix.axes[0].get_xlabel() == f"share of the {len(EVAL_SET)} pages"
     card = plot_scorecard(frame, VARIANT_ORDER)
     assert_clean_chart(card, 1)
     assert len(card.axes[0].get_yticklabels()) == len(EVAL_SET)

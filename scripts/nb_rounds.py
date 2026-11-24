@@ -3,7 +3,10 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
+from doc_review_opt.fixtures import EVAL_SET
 from scripts.cells import Cell, code, md
+
+PAGES = len(EVAL_SET)
 
 
 def _live_loop() -> list[Cell]:
@@ -16,18 +19,11 @@ The live helper in [tool_agent.py](../src/doc_review_opt/agent/classifiers/tool_
 The example takes allowed tools from fixture labels; use evaluated logic in production. Live runs use the same graph and checks as the simulation, and every call is charged to the $1 budget.
 """),
         code("""
-from itertools import zip_longest
-
 from doc_review_opt.agent.classifiers.tool_agent import live_config_for_page
 from doc_review_opt.exceptions import BudgetExceededError
-from doc_review_opt.experiment.live import run_live_variant
+from doc_review_opt.experiment.live import pick_live_pages, run_live_variant
 
-by_route = {}
-for page in EVAL_SET:
-    by_route.setdefault(page.labels.expected_route, []).append(page)
-LIVE_PAGES = [
-    page for group in zip_longest(*by_route.values()) for page in group if page
-][:LIVE_PAGE_LIMIT]
+LIVE_PAGES = pick_live_pages(EVAL_SET)
 
 live_page = SAMPLE_PAGE
 print(live_config_for_page(live_page, CONTROLS))
@@ -103,8 +99,8 @@ print(BAD_BASELINE_PROMPT)
 print("--- controlled prompt ---")
 print(CONTROLLED_PROMPT)
 """),
-        md("""
-**Re-measure.** Same 30 pages, before and after.
+        md(f"""
+**Re-measure.** Same {PAGES} pages, before and after.
 """),
         code("""
 compare_rounds(BASELINE, CONTROLS)
@@ -175,7 +171,7 @@ quality_gate(CONTROLS, ROUTING)
         md("""
 **Tradeoff.** Triage adds tokens to every page, and a wrong triage becomes a wrong escalation. Triage is also an LLM doing classification, which opens the door to Round 3.
 
-**Live (2026-11-18, 6 pages).** Round 2 was slower than Round 1 (p50 4.00s against 2.96s) and misrouted one page (quality 0.95). Model cost per page did fall ($0.00039 against $0.00112). The simulated latency gain is a formula, not a measurement.
+**Live (2026-11-18, 6 pages).** Round 2 was slower than Round 1 (p50 4.00s against 2.96s) and scored lower (quality 0.95 against 0.98). Model cost per page did fall ($0.00039 against $0.00112). The simulated latency gain is a formula, not a measurement.
 """),
         code("""
 display(plot_progress(summary, upto_variant=ROUTING))
@@ -311,7 +307,7 @@ print("\\n".join(difflib.unified_diff(
 
 **Simulation assumption.** The dry-run privileged probability for cc'd mail under the protocol wording is a `config.toml` value, not a measurement.
 
-**The live run refuted it (2026-11-18).** The real API scored ARC-000306 at 0.02 (original wording) and 0.00 (protocol wording), and ARC-000413 at 0.00 with both. The simulated over-escalation of about 0.3 did not reproduce, so `03b` is a simulation-only illustration. The protocol wording stays because it is free and matches the protocol.
+**A separate live probe refuted it (2026-11-18).** The real API scored ARC-000306 at 0.02 (original wording) and 0.00 (protocol wording), and ARC-000413 at 0.00 with both. The simulated over-escalation of about 0.3 did not reproduce, so `03b` is a simulation-only illustration. The protocol wording stays because it is free and matches the protocol.
 """),
         code("""
 import pandas as pd

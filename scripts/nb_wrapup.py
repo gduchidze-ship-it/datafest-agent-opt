@@ -3,7 +3,10 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
+from doc_review_opt.fixtures import EVAL_SET
 from scripts.cells import Cell, code, md
+
+PAGES = len(EVAL_SET)
 
 
 def _walkthroughs() -> list[Cell]:
@@ -64,10 +67,10 @@ walkthrough(trap_page, "Privileged trap page")
         code("""
 walkthrough(borderline_page, "Borderline page")
 """),
-        md("""
+        md(f"""
 ## Before and after summary
 
-The baseline against the final workflow (Round 5), same 30 pages.
+The baseline against the final workflow (Round 5), same {PAGES} pages.
 """),
         code("""
 base = SUMMARY_BY_VARIANT.loc[BASELINE]
@@ -134,7 +137,7 @@ What to take away:
 - **A decision model wins on typed decisions.** Live, Decisions was about 6x faster than `gpt-6-luna` and 6 to 8x faster than `gpt-6.1-terra`, and 4 to 6x cheaper than `gpt-6.1-terra`. Its probabilities can be calibrated, audited and routed in code. Against the smallest LLM it was 1.7x pricier, so that case rests on latency and auditability.
 - **It does not replace an LLM.** It cannot generate text, extract to your schema, call tools or explain itself, it runs only on `gpt-6-luna`, and it can refuse. Keep an LLM for redaction text and second opinions, and fail safe to an attorney.
 - **Calibrate per engine.** A score is an expected value, confidence is not correctness, and confidence does not port between engines.
-- **Live agreed with the simulation on direction, not every detail.** Controls and the decision model cut tokens, latency and cost; routing was slower and misrouted one page; caching cost more on 6 pages. Trust measured numbers.
+- **Live agreed with the simulation on direction, not every detail.** Controls and the decision model cut tokens, latency and cost; routing was slower and scored lower; caching cost more on 6 pages. Trust measured numbers.
 - **Blend in the human cost.** The cheapest model per page is not the cheapest workflow if more pages reach an attorney.
 
 **Caveats.** Pages are synthetic. Simulated token, latency, cache and accuracy numbers are illustrative formulas, the attorney cost per page is an assumption, and tool selection uses fixture labels. The live run (2026-11-18, 6 pages) is an anecdote. Use larger live traces and attorney-graded evaluations before deploying.
