@@ -367,10 +367,22 @@ class DiagramLayout(_Frozen):
     corner: float
 
 
+class GraphNodeStyle(_Frozen):
+    label: str
+    kind: str
+
+
+class GraphStyle(_Frozen):
+    title: str
+    group: str
+    nodes: dict[str, GraphNodeStyle]
+
+
 class DiagramSettings(_Frozen):
     layout: DiagramLayout
     kinds: dict[str, KindStyle]
     diagrams: dict[str, DiagramSpec]
+    graph: GraphStyle
 
 
 def _placeholders(settings: Settings) -> dict[str, str]:
@@ -418,10 +430,15 @@ def parse_diagrams(raw: Mapping[str, Any], settings: Settings) -> DiagramSetting
             raise ConfigError(f"diagram kind {kind!r} uses a color not in [palette]")
     values = _placeholders(settings)
     diagrams = {name: _resolve(spec, values) for name, spec in parsed.diagrams.items()}
-    for name, spec in diagrams.items():
-        unknown = {node.kind for node in spec.nodes} - set(parsed.kinds)
+    used = {
+        f"diagram {name!r}": {node.kind for node in spec.nodes}
+        for name, spec in diagrams.items()
+    }
+    used["[graph]"] = {style.kind for style in parsed.graph.nodes.values()}
+    for where, kinds in used.items():
+        unknown = kinds - set(parsed.kinds)
         if unknown:
-            raise ConfigError(f"diagram {name!r} uses unknown kinds {unknown}")
+            raise ConfigError(f"{where} uses unknown kinds {unknown}")
     return parsed.model_copy(update={"diagrams": diagrams})
 
 

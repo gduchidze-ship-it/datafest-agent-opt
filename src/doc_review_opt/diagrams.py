@@ -1,10 +1,12 @@
-"""Flow diagrams drawn with matplotlib from the data in diagrams.toml."""
+"""Flow diagrams drawn with matplotlib from diagrams.toml or a compiled graph."""
 
 from __future__ import annotations
 
 from io import BytesIO
 from itertools import combinations
 
+from langchain_core.runnables.graph import Graph
+from langgraph.graph import START
 from matplotlib.axes import Axes
 from matplotlib.backend_bases import RendererBase
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -25,6 +27,7 @@ from doc_review_opt.exceptions import DiagramLayoutError
 PALETTE = get_settings().palette
 CHART_WIDTH = get_settings().chart.width
 TITLE_Y = 0.35
+SUBGRAPH_SEPARATOR = ":"
 
 Point = tuple[float, float]
 Size = tuple[float, float]
@@ -210,9 +213,8 @@ def _draw_edge(
     )
 
 
-def draw_diagram(name: str) -> Figure:
-    diagrams = get_diagrams()
-    spec, layout = diagrams.diagrams[name], diagrams.layout
+def _render(name: str, spec: DiagramSpec) -> Figure:
+    layout = get_diagrams().layout
     height = layout.top_margin + spec.rows * layout.row_height + layout.bottom_margin
     fig = DiagramFigure(figsize=(CHART_WIDTH, height), facecolor=PALETTE.surface)
     renderer = FigureCanvasAgg(fig).get_renderer()  # type: ignore[no-untyped-call]
@@ -242,3 +244,77 @@ def draw_diagram(name: str) -> Figure:
     for edge in spec.edges:
         _draw_edge(axis, edge, centers, patches, sizes, layout)
     return fig
+
+
+def draw_diagram(name: str) -> Figure:
+    return _render(name, get_diagrams().diagrams[name])
+
+
+def _depths(graph: Graph) -> dict[str, int]:
+    depths = {START: 0}
+    frontier = {START}
+    level = 0
+    while frontier:
+        level += 1
+        frontier = {e.target for e in graph.edges if e.source in frontier}
+        frontier -= depths.keys()
+        depths |= dict.fromkeys(frontier, level)
+    unreachable = graph.nodes.keys() - depths.keys()
+    if unreachable:
+        raise DiagramLayoutError(
+            f"graph nodes {sorted(unreachable)} are not reachable from {START}"
+        )
+    return depths
+
+
+def _columns(graph: Graph) -> list[list[str]]:
+    depths = _depths(graph)
+    columns: list[list[str]] = [[] for _ in range(max(depths.values()) + 1)]
+    for node_id in graph.nodes:
+        columns[depths[node_id]].append(node_id)
+    return columns
+
+
+def _graph_node(node_id: str, col: int, row: float) -> DiagramNode:
+    style = get_diagrams().graph.nodes.get(node_id)
+    if style is None:
+        raise DiagramLayoutError(
+            f"graph node {node_id!r} has no [graph.nodes] entry in diagrams.toml"
+        )
+    return DiagramNode(id=node_id, label=style.label, kind=style.kind, col=col, row=row)
+
+
+def graph_spec(graph: Graph) -> DiagramSpec:
+    style = get_diagrams().graph
+    columns = _columns(graph)
+    rows = max(len(ids) for ids in columns)
+    nodes = tuple(
+        _graph_node(node_id, col, row + (rows - len(ids)) / 2)
+        for col, ids in enumerate(columns)
+        for row, node_id in enumerate(ids)
+    )
+    edges = tuple(
+        DiagramEdge.model_validate(
+            {
+                "from": e.source,
+                "to": e.target,
+                "style": "dashed" if e.conditional else "solid",
+            }
+        )
+        for e in graph.edges
+    )
+    grouped = tuple(node_id for node_id in graph.nodes if SUBGRAPH_SEPARATOR in node_id)
+    groups = (DiagramGroup(label=style.group, nodes=grouped),) if grouped else ()
+    return DiagramSpec(
+        title=style.title,
+        cols=len(columns),
+        rows=rows,
+        nodes=nodes,
+        edges=edges,
+        groups=groups,
+    )
+
+
+def draw_graph(graph: Graph) -> Figure:
+    spec = graph_spec(graph)
+    return _render(spec.title, spec)

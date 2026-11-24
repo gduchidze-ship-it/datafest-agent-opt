@@ -5,10 +5,12 @@ from __future__ import annotations
 import copy
 import tomllib
 from importlib.resources import files
-from typing import Any
+from typing import Any, TypedDict
 
 import matplotlib.pyplot as plt
 import pytest
+from langchain_core.runnables.graph import Graph
+from langgraph.graph import END, START, StateGraph
 from matplotlib.backend_bases import RendererBase
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.colors import to_hex
@@ -22,8 +24,16 @@ from doc_review_opt.config import (
     get_settings,
     parse_diagrams,
 )
-from doc_review_opt.diagrams import DiagramFigure, draw_diagram, list_diagrams
+from doc_review_opt.diagrams import (
+    DiagramFigure,
+    draw_diagram,
+    draw_graph,
+    graph_spec,
+    list_diagrams,
+)
 from doc_review_opt.exceptions import ConfigError, DiagramLayoutError
+from doc_review_opt.graph import build_review_graph, review_checkpointer
+from tests.helpers import FakeRedactor, StubClassifier, make_result
 
 EXPECTED = {
     "optimization_loop",
@@ -287,3 +297,126 @@ def test_figure_shows_as_png_without_a_matplotlib_backend() -> None:
     fig = draw_diagram("round1")
     assert isinstance(fig, DiagramFigure)
     assert fig._repr_png_().startswith(PNG_MAGIC)
+
+
+REVIEW_GRAPH_EDGES = {
+    ("__start__", "review_page:classify", "dashed"),
+    ("review_page:classify", "review_page:attorney_review", "dashed"),
+    ("review_page:classify", "review_page:redact", "dashed"),
+    ("review_page:classify", "review_page:produce", "dashed"),
+    ("review_page:classify", "review_page:withhold", "dashed"),
+    ("review_page:redact", "review_page:attorney_review", "dashed"),
+    ("review_page:attorney_review", "review_page:__end__", "solid"),
+    ("review_page:produce", "review_page:__end__", "solid"),
+    ("review_page:withhold", "review_page:__end__", "solid"),
+    ("review_page:__end__", "__end__", "solid"),
+}
+REVIEW_GRAPH_CELLS = {
+    "__start__": (0, 1.5),
+    "review_page:classify": (1, 1.5),
+    "review_page:attorney_review": (2, 0),
+    "review_page:redact": (2, 1),
+    "review_page:produce": (2, 2),
+    "review_page:withhold": (2, 3),
+    "review_page:__end__": (3, 1.5),
+    "__end__": (4, 1.5),
+}
+REVIEW_GRAPH_STYLES = {
+    "__start__": ("START\nbatch of pages", "note"),
+    "review_page:classify": ("classify\nengine + code router", "step"),
+    "review_page:attorney_review": ("attorney_review\ninterrupt()", "attorney"),
+    "review_page:redact": ("redact", "redact"),
+    "review_page:produce": ("produce", "produce"),
+    "review_page:withhold": ("withhold", "withhold"),
+    "review_page:__end__": ("page done", "note"),
+    "__end__": ("END\nall results", "note"),
+}
+REVIEW_PAGE_NODES = {
+    "review_page:classify",
+    "review_page:attorney_review",
+    "review_page:redact",
+    "review_page:produce",
+    "review_page:withhold",
+    "review_page:__end__",
+}
+
+
+@pytest.fixture(scope="module")
+def review_graph() -> Graph:
+    classifier = StubClassifier(
+        make_result(responsive=2.0, confidence=0.9, privileged=0.0, pii=0.0)
+    )
+    compiled = build_review_graph(classifier, FakeRedactor(), review_checkpointer())
+    return compiled.get_graph(xray=True)
+
+
+def test_graph_spec_lays_out_the_compiled_review_graph(review_graph: Graph) -> None:
+    spec = graph_spec(review_graph)
+    edges = [(e.source, e.target, e.style) for e in spec.edges]
+    assert len(edges) == 10
+    assert set(edges) == REVIEW_GRAPH_EDGES
+    assert [e.label for e in spec.edges] == [""] * 10
+    assert (spec.cols, spec.rows) == (5, 4)
+    assert {n.id: (n.col, n.row) for n in spec.nodes} == REVIEW_GRAPH_CELLS
+
+
+def test_graph_spec_labels_nodes_from_toml(review_graph: Graph) -> None:
+    spec = graph_spec(review_graph)
+    assert spec.title == "The review graph, drawn from the compiled LangGraph"
+    assert {n.id: (n.label, n.kind) for n in spec.nodes} == REVIEW_GRAPH_STYLES
+    (group,) = spec.groups
+    assert group.label == "review_page: one subgraph per page, fanned out with Send"
+    assert set(group.nodes) == REVIEW_PAGE_NODES
+
+
+def test_draw_graph_draws_every_node_and_edge(review_graph: Graph) -> None:
+    fig = draw_graph(review_graph)
+    assert isinstance(fig, DiagramFigure)
+    patches = fig.axes[0].patches
+    assert {p.get_gid() for p in patches} >= set(REVIEW_GRAPH_CELLS)
+    arrows = [p for p in patches if isinstance(p, FancyArrowPatch)]
+    assert len(arrows) == 10
+    assert [p.get_linestyle() for p in arrows].count("--") == 6
+
+
+class TinyState(TypedDict):
+    value: int
+
+
+def keep(state: TinyState) -> TinyState:
+    return state
+
+
+def test_graph_node_missing_from_toml_is_rejected() -> None:
+    tiny = StateGraph(TinyState)
+    tiny.add_node("x", keep)
+    tiny.add_edge(START, "x")
+    tiny.add_edge("x", END)
+    with pytest.raises(DiagramLayoutError, match=r"graph node 'x' has no"):
+        graph_spec(tiny.compile().get_graph())
+
+
+def test_graph_without_subgraph_nodes_has_no_group() -> None:
+    graph = Graph()
+    start, end = graph.add_node(None, "__start__"), graph.add_node(None, "__end__")
+    graph.add_edge(start, end)
+    spec = graph_spec(graph)
+    assert (spec.cols, spec.rows) == (2, 1)
+    assert spec.groups == ()
+
+
+def test_unreachable_graph_node_is_rejected() -> None:
+    graph = Graph()
+    graph.add_node(None, "__start__")
+    graph.add_node(None, "review_page:produce")
+    with pytest.raises(
+        DiagramLayoutError, match=r"\['review_page:produce'\] are not reachable"
+    ):
+        graph_spec(graph)
+
+
+def test_unknown_graph_kind_is_rejected() -> None:
+    data = copy.deepcopy(raw())
+    data["graph"]["nodes"]["__start__"]["kind"] = "sparkle"
+    with pytest.raises(ConfigError, match=r"\[graph\] uses unknown kinds"):
+        parse_diagrams(data, get_settings())
