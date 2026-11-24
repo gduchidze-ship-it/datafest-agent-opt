@@ -93,6 +93,16 @@ max_extra_tools_before_flag = 2
 snippet_chars = 40
 guardrail_pass_floor = 0.95
 
+[metrics]
+median_quantile = 0.5
+tail_quantile = 0.95
+route_accuracy_floor = 0.90
+relevance_recall_floor = 0.95
+privileged_recall_floor = 1.0
+pii_recall_floor = 1.0
+max_under_escalation_rate = 0.05
+max_unnecessary_escalation_rate = 0.20
+
 [simulation]
 base_latency_s = 0.28
 input_tokens_per_s = 5200

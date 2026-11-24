@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -12,6 +13,15 @@ import pandas as pd
 
 from doc_review_opt.agent.variants import VARIANT_LABELS
 from doc_review_opt.config import get_settings
+from doc_review_opt.experiment.metrics import (
+    CEILINGS,
+    FLOORS,
+    ROUTES,
+    HoldoutReport,
+    VariantMetrics,
+    all_variant_metrics,
+    variant_metrics,
+)
 from doc_review_opt.experiment.simulation import variant_request_example
 from doc_review_opt.experiment.traces import Trace, deterministic_guardrail_check
 from doc_review_opt.fixtures import ATTORNEYS, EVAL_SET
@@ -190,12 +200,148 @@ def before_after(summary: pd.DataFrame, previous: str, current: str) -> pd.DataF
     )
 
 
+_WATCH_MARK = " (watch)"
+_REPORTED = (
+    ("route accuracy", "route_accuracy", "{:.0%}", "route_accuracy"),
+    ("relevance recall", "relevance_recall", "{:.0%}", "relevance_recall"),
+    (
+        "over-withholding rate",
+        "over_withholding_rate",
+        "{:.0%}",
+        "relevance_recall",
+    ),
+    ("privileged recall", "privileged_recall", "{:.0%}", "privileged_recall"),
+    ("PII recall", "pii_recall", "{:.0%}", "pii_recall"),
+    (
+        "under-escalation rate",
+        "under_escalation_rate",
+        "{:.0%}",
+        "under_escalation_rate",
+    ),
+    (
+        "unnecessary escalation rate",
+        "unnecessary_escalation_rate",
+        "{:.0%}",
+        "unnecessary_escalation_rate",
+    ),
+    ("p50 latency (s)", "p50_latency_s", "{:.2f}", ""),
+    ("p95 latency (s)", "p95_latency_s", "{:.2f}", ""),
+    ("$/page with attorney time", "cost_per_page_usd", "${:.3f}", ""),
+)
+
+
+def watch_percent(value: float, bound: float, *, below: bool) -> str:
+    shown = round(value * 100)
+    limit = round(bound * 100)
+    if below and shown >= limit:
+        shown = math.floor(value * 100)
+    elif not below and shown <= limit:
+        shown = math.ceil(value * 100)
+    return f"{shown}%"
+
+
+def _bound(attribute: str) -> tuple[float, bool] | None:
+    if attribute in FLOORS:
+        return FLOORS[attribute], True
+    if attribute in CEILINGS:
+        return CEILINGS[attribute], False
+    if attribute == "over_withholding_rate":
+        return 1 - FLOORS["relevance_recall"], False
+    return None
+
+
+def _reported_cell(
+    metrics: VariantMetrics, attribute: str, pattern: str, watch_key: str
+) -> str:
+    value = getattr(metrics, attribute)
+    flagged = watch_key in metrics.watch
+    bound = _bound(attribute)
+    if flagged and bound is not None:
+        return watch_percent(value, bound[0], below=bound[1]) + _WATCH_MARK
+    return pattern.format(value) + (_WATCH_MARK if flagged else "")
+
+
+def metrics_table(
+    traces: Sequence[Trace],
+    variants: Sequence[str],
+    pages: Sequence[ReviewPage] = EVAL_SET,
+) -> pd.DataFrame:
+    floor = get_settings().quality.guardrail_pass_floor
+    gates = [gate(traces, variant, pages) for variant in variants]
+    metrics = all_variant_metrics(traces, variants, pages)
+    labels = [VARIANT_LABELS[variant] for variant in variants]
+    rows: list[tuple[str, str, list[str]]] = [
+        (
+            "hard gate",
+            "privileged pages produced (must be 0)",
+            [str(g.privileged_leaks) for g in gates],
+        ),
+        (
+            "hard gate",
+            "PII leaked pages (must be 0)",
+            [str(g.pii_leaks) for g in gates],
+        ),
+        (
+            "hard gate",
+            f"guardrail pass rate (floor {floor:.0%})",
+            [f"{g.pass_rate:.0%}" for g in gates],
+        ),
+        ("hard gate", "round accepted", ["yes" if g.accepted else "no" for g in gates]),
+        *(
+            (
+                "reported",
+                label,
+                [_reported_cell(m, attribute, pattern, key) for m in metrics],
+            )
+            for label, attribute, pattern, key in _REPORTED
+        ),
+    ]
+    return pd.DataFrame(
+        [
+            {"kind": kind, "metric": name, **dict(zip(labels, cells, strict=True))}
+            for kind, name, cells in rows
+        ]
+    )
+
+
+def confusion_table(
+    traces: Sequence[Trace],
+    variant: str,
+    pages: Sequence[ReviewPage] = EVAL_SET,
+) -> pd.DataFrame:
+    table = pd.DataFrame(
+        variant_metrics(traces, pages, variant).confusion,
+        index=pd.Index(ROUTES, name="expected"),
+        columns=pd.Index(ROUTES, name="actual"),
+    )
+    return table
+
+
+def holdout_table(report: HoldoutReport) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "policy": s.policy,
+            "split": s.split,
+            "escalation rate": f"{s.score.escalation_rate:.0%}",
+            "privileged leaks": s.score.privileged_leaks,
+            "PII leaks": s.score.pii_leaks,
+            "quality": f"{s.score.mean_quality:.2f}",
+            "$/page": f"${s.score.blended_cost_per_page_usd:.3f}",
+        }
+        for s in report.scores
+    )
+
+
 __all__ = [
     "GateResult",
     "before_after",
+    "confusion_table",
     "gate",
     "gate_table",
+    "holdout_table",
+    "metrics_table",
     "page_table",
     "request_diff",
     "symptoms",
+    "watch_percent",
 ]

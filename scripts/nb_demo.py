@@ -206,6 +206,12 @@ def _measure() -> list[Cell]:
 
 Every round runs on all 30 pages (simulated, seconds). One trace per page per round.
 """),
+        code('draw_diagram("eval_pipeline")'),
+        md("""
+- **Run and trace:** each variant goes through the same graph; every page leaves one trace.
+- **Grade:** deterministic guardrails and metrics read the trace and the page labels. No LLM judge.
+- **Gate and report:** hard gates and the guardrail pass floor accept or reject the round; reported metrics only warn, marked **(watch)** below a floor in `config.toml`.
+"""),
         code("""
 from doc_review_opt.agent.variants import (
     BASELINE,
@@ -222,7 +228,7 @@ from doc_review_opt.agent.variants import (
 from doc_review_opt.experiment.simulation import simulate_all
 from doc_review_opt.experiment.traces import traces_frame
 from doc_review_opt.reporting.reporting import plot_progress, summarize
-from doc_review_opt.reporting.walkthrough import before_after, gate, request_diff, symptoms
+from doc_review_opt.reporting.walkthrough import before_after, gate, metrics_table, request_diff, symptoms
 
 traces = await simulate_all()
 frame = traces_frame(traces)
@@ -239,8 +245,11 @@ display(frame[columns].head().style.format(formats).hide(axis="index"))
 print(symptoms(summary, BASELINE))
 print(gate(traces, BASELINE))
 """),
+        code("""
+display(metrics_table(traces, [BASELINE]).style.hide(axis="index"))
+"""),
         md("""
-**Errors found:** 4.2 of 5 tool calls per page are unneeded, about 8k tokens per page, PII left in produced text on 2 pages. Each round fixes one thing.
+**Errors found:** 4.2 of 5 tool calls per page are unneeded, about 8k tokens per page, PII left in produced text on 2 pages, route accuracy 77%, 25% needless attorney reviews. Each round fixes one thing.
 """),
     ]
 
@@ -431,13 +440,25 @@ def _wrapup() -> list[Cell]:
         md("## Results: the climb"),
         code("""
 from doc_review_opt.reporting.reporting import plot_quality_gate, plot_round_chart
-from doc_review_opt.reporting.walkthrough import gate_table
+from doc_review_opt.reporting.walkthrough import confusion_table, gate_table, holdout_table, metrics_table
 
+floor = get_settings().quality.guardrail_pass_floor
 display(plot_round_chart(summary))
+display(plot_quality_gate(gate_table(traces, VARIANT_ORDER), floor))
 """),
         code("""
-floor = get_settings().quality.guardrail_pass_floor
-display(plot_quality_gate(gate_table(traces, VARIANT_ORDER), floor))
+display(metrics_table(traces, VARIANT_ORDER).style.hide(axis="index"))
+display(confusion_table(traces, SPLIT))
+"""),
+        code("""
+from doc_review_opt.experiment.metrics import classifications_by_page, holdout_check
+
+report = holdout_check(classifications_by_page(engine_runs["decisions"]))
+display(holdout_table(report).style.hide(axis="index"))
+print(f"Leak-free on the unseen half: {report.holds} ({report.calibration_pages} and {report.holdout_pages} pages)")
+"""),
+        md("""
+**Calibration holdout:** the policy is refit on one half of the pages (alternating within each route) and scored on the other. No leaks on unseen pages, and far cheaper than the default policy (default: 81% and 86% escalations). Escalations are 44% on the calibration half and 57% on the holdout half, and quality is 0.93 and 0.89. The thresholds were tuned on the calibration half, so only the holdout rows are out of sample; the holdout is only 14 pages, a small sample.
 """),
         md("""
 ## Live reality check

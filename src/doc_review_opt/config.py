@@ -105,6 +105,17 @@ class Quality(_Frozen):
     guardrail_pass_floor: float
 
 
+class Metrics(_Frozen):
+    median_quantile: float = Field(gt=0, lt=1)
+    tail_quantile: float = Field(gt=0, le=1)
+    route_accuracy_floor: float = Field(ge=0, le=1)
+    relevance_recall_floor: float = Field(ge=0, le=1)
+    privileged_recall_floor: float = Field(ge=0, le=1)
+    pii_recall_floor: float = Field(ge=0, le=1)
+    max_under_escalation_rate: float = Field(ge=0, le=1)
+    max_unnecessary_escalation_rate: float = Field(ge=0, le=1)
+
+
 class EngineProfile(_Frozen):
     engine: Literal["decisions", "llm"]
     model: str
@@ -285,6 +296,7 @@ class Settings(_Frozen):
     batch: Batch
     attorney: Attorney
     quality: Quality
+    metrics: Metrics
     simulation: Simulation
     variants: dict[str, VariantConfig]
     scoring: Scoring
@@ -390,6 +402,7 @@ def _placeholders(settings: Settings) -> dict[str, str]:
         **{k: str(v) for k, v in settings.policy.calibrated.model_dump().items()},
         **settings.models.model_dump(),
         "batch_off": f"{1 - settings.pricing.batch_discount:.0%}",
+        "guardrail_floor": f"{settings.quality.guardrail_pass_floor:.0%}",
     }
 
 

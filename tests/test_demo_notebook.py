@@ -26,6 +26,7 @@ DIAGRAMS = (
     "round5",
     "human_in_the_loop",
     "decisions_or_llm",
+    "eval_pipeline",
 )
 INTRO_RUN = "3 pages finished, 1 waiting for an attorney: ARC-000284"
 

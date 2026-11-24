@@ -243,6 +243,26 @@ groups = [
   { label = "Batch lane, {batch_off} off", nodes = ["log", "qa", "tags"] },
 ]
 
+[diagrams.eval_pipeline]
+title = "The eval pipeline: one variant, 30 pages, one verdict"
+cols = 3
+rows = 2
+nodes = [
+  { id = "evalset", label = "Eval set\n30 labelled pages", col = 0, row = 0, kind = "step" },
+  { id = "run", label = "Run one variant\nthrough the same graph", col = 1, row = 0, kind = "step" },
+  { id = "traces", label = "One trace\nper page", col = 2, row = 0, kind = "step" },
+  { id = "graders", label = "Graders\nguardrails and metrics", col = 2, row = 1, kind = "step" },
+  { id = "gate", label = "Quality gate\nhard gates, {guardrail_floor} floor", col = 1, row = 1, kind = "step" },
+  { id = "report", label = "Round report\nbefore/after, scorecard", col = 0, row = 1, kind = "step" },
+]
+edges = [
+  { from = "evalset", to = "run" },
+  { from = "run", to = "traces" },
+  { from = "traces", to = "graders" },
+  { from = "graders", to = "gate" },
+  { from = "gate", to = "report" },
+]
+
 [diagrams.human_in_the_loop]
 title = "Attorney review pauses the graph"
 cols = 5

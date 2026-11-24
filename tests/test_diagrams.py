@@ -47,6 +47,7 @@ EXPECTED = {
     "round5",
     "human_in_the_loop",
     "decisions_or_llm",
+    "eval_pipeline",
 }
 MAX_BOXES = 10
 MIN_FONT = 11
@@ -240,6 +241,14 @@ def test_policy_placeholders_resolve_from_config() -> None:
     assert get_settings().models.second_opinion in labels
     lanes = " ".join(g.label for g in get_diagrams().diagrams["round5"].groups)
     assert "50% off" in lanes
+    floor = get_settings().quality.guardrail_pass_floor
+    gate = next(
+        n.label
+        for n in get_diagrams().diagrams["eval_pipeline"].nodes
+        if n.id == "gate"
+    )
+    assert f"{floor:.0%} floor" in gate
+    assert "{" not in gate
 
 
 def break_diagram(change: Any) -> DiagramSettings:
